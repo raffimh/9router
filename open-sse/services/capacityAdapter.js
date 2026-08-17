@@ -100,7 +100,6 @@ export function augmentModelsWithCapacityAdapter(models, requiredCapabilities, s
 }
 
 const CHARS_PER_TOKEN = 4; // rough estimate; avoids pulling in a tokenizer dependency
-const HEAD_KEEP = 6;      // messages after system kept verbatim before dropping the middle
 
 function blockLength(content) {
   if (typeof content === "string") return content.length;
@@ -110,10 +109,11 @@ function blockLength(content) {
   return 0;
 }
 
-// Trim history to fit a (possibly smaller) context window by dropping the MIDDLE.
+// Trim history to fit a (possibly smaller) context window only when necessary.
 // Preserves: all system/instruction messages (head), and the trailing user run
 // carrying the media the switch happened for (tail). Older middle turns between
-// the head instructions and the current turn are dropped first.
+// the head instructions and the current turn are dropped LAST, and only when the
+// full history actually exceeds the adapter model's context window budget.
 export function stripHistoryForContext(body, contextWindow) {
   const key = Array.isArray(body.messages) ? "messages"
     : Array.isArray(body.input) ? "input"
@@ -139,9 +139,9 @@ export function stripHistoryForContext(body, contextWindow) {
   // Cap at 80% of the adapter model's context window — leaves room for the response.
   const budgetChars = (contextWindow || 200000) * 0.8 * CHARS_PER_TOKEN;
 
-  // Prefer keeping the first HEAD_KEEP messages (initial instructions/context) verbatim;
-  // only trim further if even that exceeds the adapter model's context window.
-  const headKept = older.slice(0, HEAD_KEEP);
+  // Prefer keeping ALL older messages verbatim; only trim if even that exceeds
+  // the adapter model's context window.
+  const headKept = older.slice();
   let total = systemMsgs.concat(headKept, tail).reduce((s, m) => s + blockLength(contentOf(m)), 0);
 
   // If head + tail overflow, drop head turns from the end (closest to middle) first.
