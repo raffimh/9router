@@ -1,0 +1,32 @@
+﻿Subject: [PATCH] fix(capacityAdapter): remove unconditional slice(0,6) in vision trimmer
+
+Bug: The capacityAdapter.vision trimmer in chunk 112.js unconditionally
+slices the conversation head to 6 messages BEFORE checking the token
+budget. This discards the middle of the conversation (e.g. user's
+current task) whenever the head exceeds 6 non-system messages, even
+when the model's context window has plenty of room (e.g. Gemini 1M).
+
+Symptom: vision requests with images get routed to models like
+gemini-3.7-flash, but the context sent has only: system + 6 earliest
+messages + tail. Any task defined after message 6 is dropped, causing
+the model to answer an old unrelated topic (typically SSH test from
+session preamble).
+
+Fix: Change `o = l.slice(0, 6)` to `o = l.slice()` so all leading
+messages are kept. The existing budget-based pop loop
+(`for (; p > n && o.length > 0;) p -= k(m(o.pop()))`) already handles
+the case where the budget is actually exceeded.
+
+This is a one-character fix (removing the ", 6" argument). The budget
+formula `n = 0.8 * contextWindow * 4` characters still guards against
+over-long payloads.
+---
+ app/.next-cli-build/server/chunks/112.js | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/app/.next-cli-build/server/chunks/112.js b/app/.next-cli-build/server/chunks/112.js
+--- a/app/.next-cli-build/server/chunks/112.js
++++ b/app/.next-cli-build/server/chunks/112.js
+@@
+-let n=.8*(b||2e5)*4,o=l.slice(0,6),p=f.concat(o,j).reduce((a,b)=>a+k(m(b)),0)
++let n=.8*(b||2e5)*4,o=l.slice(),p=f.concat(o,j).reduce((a,b)=>a+k(m(b)),0)
