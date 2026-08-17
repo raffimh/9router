@@ -1,108 +1,214 @@
-# 🔄 9router Update Checklist — Vision Trimmer Fix
+# 🔄 9router Update Checklist — Patch Collection (raffimh/9router)
 
 > **WAJIB DIBACA setiap kali 9router menerima update** (via `npm update`, `npx 9router@latest`, atau reinstall).
 >
-> Update 9router **menimpa file build** (`.next-cli-build/`), sehingga patch vision-trimmer **HILANG otomatis**.
-> Ikuti langkah di bawah SEBELUM menggunakan 9router untuk tugas yang melibatkan gambar/vision.
+> Update 9router **menimpa file build** (`.next-cli-build/`), sehingga semua patch **HILANG otomatis**.
+> Ikuti langkah di bawah SEBELUM menggunakan 9router lagi.
 
 ---
 
-## 📋 Ringkasan cepat
+## 🩹 Patch yang dikelola di sini
+
+| # | Patch | Masalah | Status upstream (v0.5.55) |
+|---|---|---|---|
+| 1 | **Vision trimmer** (`capacityAdapter.js`) | History dipangkas `slice(0,6)` tanpa cek budget → model vision derail, menjawab topik lama | ❌ Masih bug |
+| 2 | **Qoder quota-112 disable** (`src/sse/services/auth.js`) | Qoder 403/code 112 (quota habis) hanya kena cooldown 2 menit → akun mati dipilih terus | ❌ Masih bug |
+
+Semua fix hidup di **satu branch integrasi: `patched`** di fork [`raffimh/9router`](https://github.com/raffimh/9router).
+
+```
+master (= upstream v0.5.55, sync otomatis)
+└── patched  ← SATU branch untuk semua fix
+      ├── fix(capacityAdapter): keep full history (vision trimmer)
+      ├── docs(patches): file patch + checklist ini
+      └── fix(auth): disable Qoder connection on quota exhaustion
+```
+
+> 📌 Fix lama tidak akan hilang: semuanya commit permanen di `patched`.
+> Fix baru di masa depan = tambah commit baru di branch yang sama.
+
+---
+
+## 📋 Ringkasan cepat tiap update
 
 | Langkah | Aksi | Waktu |
 |---|---|---|
-| 1 | Cek apakah upstream sudah fix | 30 detik |
-| 2 | Jika belum, re-apply patch | 10 detik |
+| 1 | Cek apakah upstream sudah menyerap tiap fix | 1 menit |
+| 2 | Re-apply patch yang masih diperlukan ke instalasi npm | 30 detik |
 | 3 | Restart 9router | 10 detik |
 | 4 | Verifikasi | 1 menit |
+| 5 | (Opsional) Sync fork + rebase branch `patched` | 1 menit |
 
 ---
 
-## Langkah 1 — Cek: apakah upstream sudah fix?
+## Langkah 1 — Cek: fix mana yang masih dibutuhkan?
 
-Jalankan ini dulu. **Jika sudah fix, berhenti — tidak perlu patch.**
+### 1a. Vision trimmer
 
 ```powershell
 $content = (Invoke-WebRequest "https://raw.githubusercontent.com/decolua/9router/main/open-sse/services/capacityAdapter.js" -UseBasicParsing).Content
 if ($content -match 'HEAD_KEEP') {
-    Write-Output "⚠️  BUG MASIH ADA di upstream → lanjut ke Langkah 2"
+    Write-Output "⚠️  Vision trimmer: BUG MASIH ADA → patch dibutuhkan"
 } else {
-    Write-Output "✅ Upstream sudah fix → tidak perlu patch, selesai!"
+    Write-Output "✅ Vision trimmer: upstream sudah fix → skip patch-nya"
 }
 ```
 
-**Atau cek manual:** buka `https://github.com/decolua/9router/blob/main/open-sse/services/capacityAdapter.js`, cari kata `HEAD_KEEP`. Kalau tidak ada, berarti sudah diperbaiki.
+Atau manual: buka `https://github.com/decolua/9router/blob/main/open-sse/services/capacityAdapter.js`, cari kata `HEAD_KEEP`.
+
+### 1b. Qoder quota-112 disable
+
+```powershell
+$content = (Invoke-WebRequest "https://raw.githubusercontent.com/decolua/9router/main/src/sse/services/auth.js" -UseBasicParsing).Content
+if ($content -match 'isQoderQuotaExhausted|Qoder quota exhausted') {
+    Write-Output "✅ Qoder 112: upstream sudah fix → skip patch-nya"
+} else {
+    Write-Output "⚠️  Qoder 112: BUG MASIH ADA → patch dibutuhkan"
+}
+```
 
 ---
 
-## Langkah 2 — Re-apply patch (jika upstream belum fix)
+## Langkah 2 — Re-apply patch ke instalasi npm
+
+> ⚠️ Path `v24.13.1` di bawah sesuai versi Node saat ini. Kalau ganti versi Node,
+> cari path aktif dengan:
+> ```powershell
+> (Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match '9router' } | Select-Object -First 1).CommandLine
+> ```
+
+### 2a. Vision trimmer → patch file build minified
 
 **Opsi A: Prompt ke agent harness** (paling gampang)
 
 Copy-paste ke opencode / Cline / harness lain:
 
 > Re-apply patch fix vision-trimmer 9router:
-> 1. Buka file `%LOCALAPPDATA%\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks\112.js`
-> 2. Cari `l.slice(0,6)`. Kalau ada → ganti jadi `l.slice()`. Kalau sudah `l.slice()` → berhenti (sudah aktif).
+> 1. Buka file `%LOCALAPPDATA%\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks\112.js` (nama chunk bisa berbeda tiap versi — cari file yang mengandung `l.slice(0,6)`).
+> 2. Ganti `l.slice(0,6)` → `l.slice()`. Kalau sudah `l.slice()` → berhenti (sudah aktif).
 > 3. Backup dulu file asli dengan suffix `.bak-<tanggal>` sebelum edit.
-> 4. Verifikasi: `l.slice(0,6)` harus 0 kemunculan, `l.slice()` harus 1.
+> 4. Verifikasi: `l.slice(0,6)` harus 0 kemunculan di seluruh folder chunks, `l.slice()` tepat 1.
 > 5. Ingatkan saya restart 9router.
->
-> Referensi fix di level source: https://github.com/raffimh/9router branch `patch/fix-vision-trimmer`
 
 **Opsi B: Manual (PowerShell)**
 
 ```powershell
-$f = "$env:LOCALAPPDATA\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks\112.js"
+$dir = "$env:LOCALAPPDATA\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks"
+$f = Get-ChildItem "$dir\*.js" -File | ForEach-Object {
+    if ((Get-Content $_.FullName -Raw) -match 'l\.slice\(0,6\)') { $_.FullName }
+}
+if (-not $f) { Write-Output "✅ Vision patch sudah aktif (atau struktur berubah)"; return }
 Copy-Item $f "$f.bak-$(Get-Date -Format yyyyMMdd-HHmmss)"
 $c = Get-Content $f -Raw -Encoding UTF8
-$new = $c -replace 'l\.slice\(0,6\)', 'l.slice()'
-Set-Content $f $new -Encoding UTF8 -NoNewline
-
-# Verifikasi
-$after = Get-Content $f -Raw
-"old count: $(([regex]::Matches($after, 'l\.slice\(0,6\)')).Count)  (harus 0)"
-"new count: $(([regex]::Matches($after, 'l\.slice\(\)')).Count)  (harus 1)"
+Set-Content $f ($c -replace 'l\.slice\(0,6\)', 'l.slice()') -Encoding UTF8 -NoNewline
+Write-Output "✅ Patched: $f"
 ```
 
-> ⚠️ **Catatan:** path `v24.13.1` di atas sesuai versi Node yang terpasang saat ini.
-> Kalau Anda ganti versi Node, sesuaikan path-nya. Cara cepat cari path aktif:
-> ```powershell
-> (Get-Process node | Where-Object { $_.CommandLine -match '9router' } | Select-Object -First 1).CommandLine
-> ```
+File patch git-format juga tersedia: [`fix-vision-trimmer.patch`](./fix-vision-trimmer.patch)
+
+### 2b. Qoder quota-112 → patch file build minified
+
+Patch ini mengubah `src/sse/services/auth.js` (source). Di instalasi npm, kodenya
+ter-bundle di salah satu chunk. Cara re-apply paling aman: **prompt agent harness**,
+karena nama chunk dan bentuk minified bisa berubah tiap versi:
+
+> Re-apply patch Qoder quota-112 disable ke build 9router:
+> 1. Di folder `%LOCALAPPDATA%\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks`, cari chunk yang mengandung fungsi `markAccountUnavailable` (atau penanganan error 403 provider). Backup file itu dulu.
+> 2. Tambahkan logika: jika provider = qoder DAN status = 403 DAN errorText mengandung `"code":"112"` → set koneksi `isActive:false`, `testStatus:"unavailable"`, dan return `shouldFallback:true, cooldownMs:0` (tanpa timed lock).
+> 3. Referensi implementasi source-level: https://github.com/raffimh/9router branch `patched`, commit "fix(auth): disable Qoder connection on quota exhaustion" — fungsi `isQoderQuotaExhausted` di `src/sse/services/auth.js`.
+> 4. Verifikasi: string `Qoder quota exhausted` muncul di chunk tersebut.
+
+> 💡 Alternatif lebih bersih: build 9router dari fork branch `patched`
+> (`npm install && npm run build`), sehingga semua fix langsung termasuk.
+> Lebih lama, tapi tidak perlu patch manual sama sekali.
 
 ---
 
 ## Langkah 3 — Restart 9router
 
-Patch tidak aktif sampai 9router di-restart.
-
 ```powershell
-# Stop proses lama
 Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match '9router' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-
-# Start ulang (sesuaikan cara Anda biasa menjalankan 9router)
+# lalu start ulang seperti biasa, misal:
 npx 9router start
 ```
 
 ---
 
-## Langkah 4 — Verifikasi patch aktif
+## Langkah 4 — Verifikasi
 
-Kirim 1 request bergambar dengan konteks >6 pesan via `auto-9router`, lalu cek dashboard 9router (dengan observability ON). Di requestDetails, jumlah pesan yang dikirim ke model vision harus **UTUH** (misal 17, 25, 36 pesan), **BUKAN** 8-10 pesan.
+| Fix | Cara cek | Hasil yang diharapkan |
+|---|---|---|
+| Vision trimmer | Request bergambar dengan konteks >6 pesan via `auto-9router`, lihat requestDetails di dashboard | Pesan ke model vision **UTUH** (17/25/36 pesan), bukan 8-10 |
+| Qoder 112 | Cek chunk build mengandung string `Qoder quota exhausted` | String ditemukan |
 
-Kalau masih 8-10 pesan → patch belum aktif, cek lagi Langkah 2-3.
+```powershell
+# Cek cepat di build
+Get-ChildItem "$env:LOCALAPPDATA\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks\*.js" -File | ForEach-Object {
+    $c = Get-Content $_.FullName -Raw -Encoding UTF8
+    if ($c -match 'Qoder quota exhausted') { "✅ qoder-112 aktif di $($_.Name)" }
+}
+$sisa = Get-ChildItem "$env:LOCALAPPDATA\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks\*.js" -File | Where-Object { (Get-Content $_.FullName -Raw) -match 'l\.slice\(0,6\)' }
+if (-not $sisa) { Write-Output "✅ vision-trimmer aktif" } else { Write-Output "❌ vision BELUM di-patch" }
+```
 
 ---
 
-## 🧠 Penjelasan singkat bug-nya
+## Langkah 5 — (Opsional) Sync fork + rebase branch `patched`
 
-`capacityAdapter.vision` memangkas history percakapan dengan `slice(0, 6)` **tanpa mengecek budget token dulu**. Akibatnya, ketika ada >6 pesan sebelum giliran terakhir, semua pesan tengah (termasuk tugas aktif) dibuang — model vision hanya melihat 6 pesan awal + ekor. Ini menyebabkan model menjawab topik lama (misal SSH) alih-alih tugas gambar yang sedang dikerjakan.
+Supaya fork tetap rapi dan `patched` selalu di atas master terbaru:
 
-Fix: ganti `slice(0, 6)` → `slice()`, sehingga semua pesan dipertahankan. Loop budget yang sudah ada tetap memangkas **hanya** ketika history benar-benar melebihi 80% context window model vision.
+```powershell
+cd <lokasi-clone-fork>
+git fetch origin                    # fork Anda sudah auto-sync dari upstream
+git checkout patched
+git rebase origin/master
+git push --force-with-lease origin patched
+```
 
-**Commit fix (level source):** [`03c17a9b`](../../commit/03c17a9b) di branch `patch/fix-vision-trimmer`
-**File patch (level build):** [`fix-vision-trimmer.patch`](./fix-vision-trimmer.patch)
+Kalau ada **konflik rebase** → artinya upstream mengubah kode di sekitar patch.
+Itu biasanya pertanda upstream sudah menangani bug-nya dengan cara lain;
+periksa dulu sebelum melanjutkan.
+
+**Menambah fix baru di masa depan:**
+
+```powershell
+git checkout patched
+# ... edit source + tes ...
+git commit -m "fix(...): penjelasan"
+git push origin patched
+```
+
+---
+
+## 🧠 Penjelasan singkat tiap bug
+
+### Vision trimmer
+`capacityAdapter.vision` memangkas history dengan `slice(0, 6)` **tanpa mengecek
+budget token dulu**. Ketika ada >6 pesan sebelum giliran terakhir, semua pesan tengah
+(termasuk tugas aktif) dibuang — model vision hanya melihat 6 pesan awal + ekor,
+sehingga menjawab topik lama alih-alih tugas gambar.
+Fix: `slice(0,6)` → `slice()`; loop budget yang ada tetap memangkas hanya saat
+history melebihi 80% context window model vision.
+
+### Qoder quota-112
+Qoder melaporkan quota habis sebagai payload SSE ber-HTTP-200 dengan envelope
+pertama `statusCodeValue: 403` + body `"code":"112"`. Tanpa fix, auth service hanya
+memberi cooldown 2 menit, sehingga pool memilih akun mati itu terus-menerus.
+Fix: perlakukan 403+code-112 sebagai sinyal account-wide — nonaktifkan koneksi
+(`isActive=false`, `testStatus=unavailable`) dan fallback ke akun/model berikutnya.
+Hanya code 112 yang trigger; code 10605 (queue throttle) dan pricingUrl tetap
+transient di jalur cooldown biasa.
+
+---
+
+## 🗂️ Struktur branch fork
+
+| Branch | Isi | Status |
+|---|---|---|
+| `patched` | **Semua fix** (vision + qoder + docs ini) | ✅ Branch kerja utama |
+| `patch/fix-vision-trimmer` | Fix vision saja (calon PR ke upstream) | Referensi |
+| `fix-qoder-112-disable-account` | Fix qoder saja (calon PR ke upstream) | Referensi |
+| ~~`qoder-403-112-fallback`~~ | Dihapus — bagian SSE probe-nya sudah diserap upstream v0.5.55 | 🗑️ (arsip lokal: tag `archive/qoder-403-112-fallback`) |
 
 ---
 
@@ -110,15 +216,14 @@ Fix: ganti `slice(0, 6)` → `slice()`, sehingga semua pesan dipertahankan. Loop
 
 | File | Fungsi |
 |---|---|
-| `fix-vision-trimmer.patch` | Patch untuk file build minified (apply ke `chunks/112.js`) |
+| `fix-vision-trimmer.patch` | Patch git-format untuk build minified (vision trimmer) |
 | `UPDATE-CHECKLIST.md` | File ini — panduan wajib tiap update |
 
 ---
 
 ## 🔔 Pengingat otomatis (opsional)
 
-Untuk memastikan tidak lupa, Anda bisa:
-
 1. **Bookmark file ini** di browser / editor.
-2. **Set reminder kalender** tiap kali Anda update 9router.
-3. **Tambahkan ke todo list agent harness** Anda, misal di opencode: "Setiap update 9router, jalankan checklist di `9router/patches/UPDATE-CHECKLIST.md`".
+2. **Set reminder** tiap kali Anda update 9router.
+3. **Tambahkan ke instruksi agent harness** Anda, misal di opencode:
+   "Setiap update 9router, jalankan checklist di `9router/patches/UPDATE-CHECKLIST.md`".
