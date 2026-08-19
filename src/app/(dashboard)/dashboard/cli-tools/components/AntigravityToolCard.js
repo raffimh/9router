@@ -400,7 +400,7 @@ export default function AntigravityToolCard({
               </p>
               <div className="flex flex-col gap-0.5 text-[11px] text-text-muted">
                 <span>1. Generates SSL cert & adds to system keychain</span>
-                <span>2. Redirects <code className="text-[10px] bg-surface px-1 rounded">daily-cloudcode-pa.googleapis.com</code> → localhost</span>
+                <span>2. Redirects <code className="text-[10px] bg-surface px-1 rounded">daily-cloudcode-pa.sandbox.googleapis.com</code> → localhost</span>
                 <span>3. Maps Antigravity models to any provider via 9Router</span>
               </div>
             </div>

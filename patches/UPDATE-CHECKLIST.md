@@ -13,6 +13,7 @@
 |---|---|---|---|
 | 1 | **Vision trimmer** (`capacityAdapter.js`) | History dipangkas `slice(0,6)` tanpa cek budget → model vision derail, menjawab topik lama | ❌ Masih bug |
 | 2 | **Qoder quota-112 disable** (`src/sse/services/auth.js`) | Qoder 403/code 112 (quota habis) hanya kena cooldown 2 menit → akun mati dipilih terus | ❌ Masih bug |
+| 3 | **Antigravity 403 fingerprint/host** (`open-sse/providers/shared.js`, MITM) | Host daily lama dan User-Agent `darwin/arm64` dapat ditolak Google, terutama di Windows | ❌ Masih bug |
 
 Semua fix hidup di **satu branch integrasi: `patched`** di fork [`raffimh/9router`](https://github.com/raffimh/9router).
 
@@ -21,7 +22,8 @@ master (= upstream v0.5.55, sync otomatis)
 └── patched  ← SATU branch untuk semua fix
       ├── fix(capacityAdapter): keep full history (vision trimmer)
       ├── docs(patches): file patch + checklist ini
-      └── fix(auth): disable Qoder connection on quota exhaustion
+      ├── fix(auth): disable Qoder connection on quota exhaustion
+      └── fix(antigravity): use sandbox host + platform-matched IDE fingerprint
 ```
 
 > 📌 Fix lama tidak akan hilang: semuanya commit permanen di `patched`.
@@ -122,6 +124,18 @@ karena nama chunk dan bentuk minified bisa berubah tiap versi:
 > (`npm install && npm run build`), sehingga semua fix langsung termasuk.
 > Lebih lama, tapi tidak perlu patch manual sama sekali.
 
+### 2c. Antigravity 403 → rebuild source dengan patch branch
+
+Patch ini mengubah source-level routing Antigravity:
+
+- memakai `daily-cloudcode-pa.sandbox.googleapis.com` sebagai host chat utama;
+- menambahkan host sandbox ke MITM/DNS routing;
+- memakai User-Agent `antigravity/ide/2.1.1 windows/amd64` pada Windows (atau pasangan OS/arsitektur host);
+- memperbarui probe koneksi agar tidak kembali ke fingerprint lama.
+
+Build ulang dari branch `patched` agar perubahan masuk ke bundle. Jangan hanya mengganti
+file OAuth onboarding; jalur chat dan MITM juga harus ikut ter-build.
+
 ---
 
 ## Langkah 3 — Restart 9router
@@ -140,6 +154,7 @@ npx 9router start
 |---|---|---|
 | Vision trimmer | Request bergambar dengan konteks >6 pesan via `auto-9router`, lihat requestDetails di dashboard | Pesan ke model vision **UTUH** (17/25/36 pesan), bukan 8-10 |
 | Qoder 112 | Cek chunk build mengandung string `Qoder quota exhausted` | String ditemukan |
+| Antigravity 403 | Cek log request dan host MITM setelah restart | Chat diarahkan ke host sandbox, tanpa `CONSUMER_INVALID` |
 
 ```powershell
 # Cek cepat di build

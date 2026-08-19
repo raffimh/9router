@@ -74,12 +74,22 @@ export const KIMI_CODING_BASE_URL = "https://api.kimi.com/coding/v1/messages";
 export const OPENAI_COMPAT_BASE = "https://api.openai.com/v1";
 export const ANTHROPIC_COMPAT_BASE = "https://api.anthropic.com/v1";
 
-// Official Antigravity IDE Desktop 2.1.1 fingerprint captured from macOS arm64.
-// Keep this static even when 9router runs on Linux: the provider profile is
-// intentionally matching the IDE client, not the server host.
+// Official Antigravity IDE Desktop 2.1.1 fingerprint. 9Router normally runs
+// alongside the IDE, so keep the OS/architecture portion aligned with the
+// host instead of always impersonating the captured macOS client.
 export const ANTIGRAVITY_IDE_VERSION = "2.1.1";
-export const ANTIGRAVITY_IDE_BASE_URL = "https://daily-cloudcode-pa.googleapis.com";
-export const ANTIGRAVITY_IDE_USER_AGENT = `antigravity/ide/${ANTIGRAVITY_IDE_VERSION} darwin/arm64`;
+export const ANTIGRAVITY_IDE_BASE_URL = "https://daily-cloudcode-pa.sandbox.googleapis.com";
+
+function antigravityPlatform() {
+  return platform() === "win32" ? "windows" : platform();
+}
+
+function antigravityArch() {
+  return arch() === "x64" ? "amd64" : arch();
+}
+
+export const ANTIGRAVITY_IDE_USER_AGENT =
+  `antigravity/ide/${ANTIGRAVITY_IDE_VERSION} ${antigravityPlatform()}/${antigravityArch()}`;
 
 // Antigravity OAuth client credentials (public CLI client — duplicated in usage.js + src/lib/oauth)
 export const ANTIGRAVITY_OAUTH_CLIENT = {

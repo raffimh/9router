@@ -101,6 +101,7 @@ async function tryGotScrapingFetch(url, options) {
 const DNS_CACHE = new Map();
 const MITM_BYPASS_HOSTS = [
   "cloudcode-pa.googleapis.com",
+  "daily-cloudcode-pa.sandbox.googleapis.com",
   "daily-cloudcode-pa.googleapis.com",
   "api.individual.githubcopilot.com",
   "q.us-east-1.amazonaws.com",
