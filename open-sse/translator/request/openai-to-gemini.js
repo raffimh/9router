@@ -170,7 +170,7 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
               }
             }
 
-            if (!(fid in toolResponses)) {
+            if (!Object.hasOwn(toolResponses, fid)) {
               toolParts.push({
                 functionResponse: {
                   id: fid,
