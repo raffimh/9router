@@ -14,6 +14,7 @@
 | 1 | **Vision trimmer** (`capacityAdapter.js`) | History dipangkas `slice(0,6)` tanpa cek budget → model vision derail, menjawab topik lama | ❌ Masih bug |
 | 2 | **Qoder quota-112 disable** (`src/sse/services/auth.js`) | Qoder 403/code 112 (quota habis) hanya kena cooldown 2 menit → akun mati dipilih terus | ❌ Masih bug |
 | 3 | **Antigravity 403 fingerprint/host** (`open-sse/providers/shared.js`, MITM) | Host daily lama dan User-Agent `darwin/arm64` dapat ditolak Google, terutama di Windows | ❌ Masih bug |
+| 4 | **Antigravity dangling functionCall** (`translator/request/openai-to-gemini.js`) | Tool result kosong (`content:""`/`null`) atau tool call tanpa hasil → `functionCall` tanpa pasangan `functionResponse` → Gemini **400 INVALID_ARGUMENT** permanen untuk session itu sampai `/compact` | ❌ Masih bug |
 
 Semua fix hidup di **satu branch integrasi: `patched`** di fork [`raffimh/9router`](https://github.com/raffimh/9router).
 
@@ -23,7 +24,8 @@ master (= upstream v0.5.55, sync otomatis)
       ├── fix(capacityAdapter): keep full history (vision trimmer)
       ├── docs(patches): file patch + checklist ini
       ├── fix(auth): disable Qoder connection on quota exhaustion
-      └── fix(antigravity): use sandbox host + platform-matched IDE fingerprint
+      ├── fix(antigravity): use sandbox host + platform-matched IDE fingerprint
+      └── fix(antigravity): always pair functionCall with functionResponse
 ```
 
 > 📌 Fix lama tidak akan hilang: semuanya commit permanen di `patched`.
@@ -66,6 +68,17 @@ if ($content -match 'isQoderQuotaExhausted|Qoder quota exhausted') {
     Write-Output "✅ Qoder 112: upstream sudah fix → skip patch-nya"
 } else {
     Write-Output "⚠️  Qoder 112: BUG MASIH ADA → patch dibutuhkan"
+}
+```
+
+### 1c. Antigravity dangling functionCall
+
+```powershell
+$content = (Invoke-WebRequest "https://raw.githubusercontent.com/decolua/9router/main/open-sse/translator/request/openai-to-gemini.js" -UseBasicParsing).Content
+if ($content -match 'hasActualResponses') {
+    Write-Output "⚠️  Antigravity pairing: BUG MASIH ADA → patch dibutuhkan"
+} else {
+    Write-Output "✅ Antigravity pairing: upstream sudah fix → skip patch-nya"
 }
 ```
 
@@ -136,6 +149,17 @@ Patch ini mengubah source-level routing Antigravity:
 Build ulang dari branch `patched` agar perubahan masuk ke bundle. Jangan hanya mengganti
 file OAuth onboarding; jalur chat dan MITM juga harus ikut ter-build.
 
+### 2d. Antigravity dangling functionCall → patch build atau rebuild
+
+Fix ini mengubah logika konverter (bukan one-liner), jadi untuk instalasi npm
+gunakan **prompt agent harness** atau **build dari fork**:
+
+> Re-apply patch fix antigravity dangling-functionCall ke build 9router:
+> 1. Di folder `%LOCALAPPDATA%\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks`, cari chunk yang mengandung `hasActualResponses`. Backup file itu dulu.
+> 2. Referensi implementasi source-level: https://github.com/raffimh/9router branch `patched`, commit "fix(antigravity): always pair functionCall with functionResponse" — `open-sse/translator/request/openai-to-gemini.js`.
+> 3. Perubahan inti: (a) keberadaan response dicek `fid in toolResponses` (bukan truthiness), (b) tool result `""`/`null` tetap menghasilkan `functionResponse` `{result:""}`, (c) tool call tanpa pesan hasil sama sekali mendapat `functionResponse` sintetis `"(no tool result returned)"`, (d) `args` JSON tak valid fallback `{}`.
+> 4. Verifikasi: string `no tool result returned` muncul di chunk tersebut.
+
 ---
 
 ## Langkah 3 — Restart 9router
@@ -155,6 +179,7 @@ npx 9router start
 | Vision trimmer | Request bergambar dengan konteks >6 pesan via `auto-9router`, lihat requestDetails di dashboard | Pesan ke model vision **UTUH** (17/25/36 pesan), bukan 8-10 |
 | Qoder 112 | Cek chunk build mengandung string `Qoder quota exhausted` | String ditemukan |
 | Antigravity 403 | Cek log request dan host MITM setelah restart | Chat diarahkan ke host sandbox, tanpa `CONSUMER_INVALID` |
+| Antigravity pairing | Session panjang dengan banyak tool call (termasuk tool ber-output kosong) via `antigravity/gemini-*` | Tidak ada 400 INVALID_ARGUMENT permanen; `/compact` tidak lagi dibutuhkan |
 
 ```powershell
 # Cek cepat di build
@@ -214,13 +239,28 @@ Fix: perlakukan 403+code-112 sebagai sinyal account-wide — nonaktifkan koneksi
 Hanya code 112 yang trigger; code 10605 (queue throttle) dan pricingUrl tetap
 transient di jalur cooldown biasa.
 
+### Antigravity dangling functionCall
+Konverter `openai→antigravity` meng-cache tool result lalu memeriksa keberadaannya
+dengan **truthiness** (`toolResponses[fid]`). Tool result ber-`content:""` atau `null`
+(bash tanpa stdout, edit tanpa output, tool yang dibatalkan) dianggap "tidak ada
+response", sehingga `functionCall` dikirim **tanpa** pasangan `functionResponse`.
+Gemini menerapkan pemasangan ketat → seluruh payload ditolak **400 INVALID_ARGUMENT**.
+Gejala khas: session baru normal; setelah cukup banyak tool call (≥1 result kosong
+masuk history) SEMUA request berikut 400 di semua akun; `/compact` menghilangkan
+poison itu dan memulihkan; model OpenAI-format (mis. glm) tidak terkena karena tidak
+enforce pairing; TIDAK berhubungan dengan context window (tetap kena di 120k).
+Fix: selalu emit `functionResponse` per `functionCall` — result asli bila ada,
+`""` untuk konten kosong, placeholder `"(no tool result returned)"` bila pesan hasil
+tidak pernah dikirim (run dibatalkan); plus `args ?? {}` untuk argumen JSON tak
+valid. Regresi dijaga oleh `tests/translator/openai-to-antigravity-pairing.test.js`.
+
 ---
 
 ## 🗂️ Struktur branch fork
 
 | Branch | Isi | Status |
 |---|---|---|
-| `patched` | **Semua fix** (vision + qoder + docs ini) | ✅ Branch kerja utama |
+| `patched` | **Semua fix** (vision + qoder + antigravity 403 + antigravity pairing + docs ini) | ✅ Branch kerja utama |
 | `patch/fix-vision-trimmer` | Fix vision saja (calon PR ke upstream) | Referensi |
 | `fix-qoder-112-disable-account` | Fix qoder saja (calon PR ke upstream) | Referensi |
 | ~~`qoder-403-112-fallback`~~ | Dihapus — bagian SSE probe-nya sudah diserap upstream v0.5.55 | 🗑️ (arsip lokal: tag `archive/qoder-403-112-fallback`) |
