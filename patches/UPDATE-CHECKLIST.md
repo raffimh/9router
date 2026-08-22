@@ -14,7 +14,7 @@
 | 1 | **Vision trimmer** (`capacityAdapter.js`) | History dipangkas `slice(0,6)` tanpa cek budget → model vision derail, menjawab topik lama | ❌ Masih bug |
 | 2 | **Qoder quota-112 disable** (`src/sse/services/auth.js`) | Qoder 403/code 112 (quota habis) hanya kena cooldown 2 menit → akun mati dipilih terus | ❌ Masih bug |
 | 3 | **Antigravity 403 fingerprint/host** (`open-sse/providers/shared.js`, MITM) | Host daily lama dan User-Agent `darwin/arm64` dapat ditolak Google, terutama di Windows | ❌ Masih bug |
-| 4 | **Antigravity dangling functionCall** (`translator/request/openai-to-gemini.js`) | Tool result kosong (`content:""`/`null`) atau tool call tanpa hasil → `functionCall` tanpa pasangan `functionResponse` → Gemini **400 INVALID_ARGUMENT** permanen untuk session itu sampai `/compact` | ❌ Masih bug |
+| 4 | **Antigravity dangling functionCall + thinking-only content** (`translator/request/openai-to-gemini.js`) | (a) Tool result kosong (`content:""`/`null`) atau tool call tanpa hasil → `functionCall` tanpa pasangan `functionResponse`; (b) Turn thinking yang terpotong (dikirim client sebagai `{content:"", reasoning_content}`) → content MODEL berisi hanya thought-part. Keduanya → Gemini **400 INVALID_ARGUMENT** permanen untuk session itu sampai `/compact` | ❌ Masih bug |
 
 Semua fix hidup di **satu branch integrasi: `patched`** di fork [`raffimh/9router`](https://github.com/raffimh/9router).
 
@@ -239,20 +239,30 @@ Fix: perlakukan 403+code-112 sebagai sinyal account-wide — nonaktifkan koneksi
 Hanya code 112 yang trigger; code 10605 (queue throttle) dan pricingUrl tetap
 transient di jalur cooldown biasa.
 
-### Antigravity dangling functionCall
-Konverter `openai→antigravity` meng-cache tool result lalu memeriksa keberadaannya
-dengan **truthiness** (`toolResponses[fid]`). Tool result ber-`content:""` atau `null`
-(bash tanpa stdout, edit tanpa output, tool yang dibatalkan) dianggap "tidak ada
-response", sehingga `functionCall` dikirim **tanpa** pasangan `functionResponse`.
-Gemini menerapkan pemasangan ketat → seluruh payload ditolak **400 INVALID_ARGUMENT**.
-Gejala khas: session baru normal; setelah cukup banyak tool call (≥1 result kosong
-masuk history) SEMUA request berikut 400 di semua akun; `/compact` menghilangkan
-poison itu dan memulihkan; model OpenAI-format (mis. glm) tidak terkena karena tidak
-enforce pairing; TIDAK berhubungan dengan context window (tetap kena di 120k).
-Fix: selalu emit `functionResponse` per `functionCall` — result asli bila ada,
-`""` untuk konten kosong, placeholder `"(no tool result returned)"` bila pesan hasil
-tidak pernah dikirim (run dibatalkan); plus `args ?? {}` untuk argumen JSON tak
-valid. Regresi dijaga oleh `tests/translator/openai-to-antigravity-pairing.test.js`.
+### Antigravity dangling functionCall + thinking-only content
+Dua bug konverter `openai→antigravity` yang sama-sama menghasilkan
+**400 INVALID_ARGUMENT deterministik** (payload-based → semua akun gagal,
+glm fallback tidak terkena, `/compact` memulihkan karena menulis ulang history):
+
+**(a) Dangling functionCall** — keberadaan tool result dicek dengan
+**truthiness**; tool result `content:""`/`null` (bash tanpa stdout, tool batal)
+dianggap "tidak ada response" → `functionCall` terkirim tanpa `functionResponse`.
+Fix: selalu emit `functionResponse` per call (`Object.hasOwn` untuk cek
+keberadaan; placeholder `"(no tool result returned)"` bila hasil tak pernah
+dikirim; `args ?? {}` untuk argumen JSON invalid).
+
+**(b) Thinking-only content** — turn Gemini THINK:high yang terpotong
+(maxOutputTokens habis saat thinking, tanpa text/tool) dikirim ulang client
+sebagai `{content:"", reasoning_content}` → konverter membuat content MODEL
+yang HANYA berisi thought-part + signature-part kosong → ditolak Google.
+Terverifikasi live: reasoning-only → 400; reasoning+text → 200;
+reasoning+tool_calls → 200. Ini penyebab utama pola "session panjang →
+400 permanen": makin panjang session + THINK:high, makin besar peluang
+ada turn thinking-only di history.
+Fix: content assistant hanya dikirim bila punya minimal satu part
+non-thought (text/functionCall).
+
+Regresi dijaga oleh `tests/translator/openai-to-antigravity-pairing.test.js` (8 test).
 
 ---
 
