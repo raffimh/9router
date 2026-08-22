@@ -267,6 +267,9 @@ export const PATTERN_CAPABILITIES = [
   { pattern: "*glm*",           caps: { reasoning: true, thinkingFormat: "zai", contextWindow: 200000 } },
 
   // ── DeepSeek (thinking.enabled + reasoning_effort; r1 = thinking-only) ─
+  // Vision variants (deepseek-v4-flash-vision-exp etc., on DeepSeek's own API:
+  // reasoning:true, input text+image, 1M ctx) must match BEFORE the text-only family.
+  { pattern: "*deepseek*vision*",  caps: { vision: true, reasoning: true, thinkingFormat: "deepseek", contextWindow: 1000000, maxOutput: 384000 } },
   { pattern: "*deepseek-v4*",   caps: { reasoning: true, thinkingFormat: "deepseek", contextWindow: 1000000, maxOutput: 384000 } },
   { pattern: "*reasoner*",      caps: { reasoning: true, thinkingFormat: "deepseek", thinkingCanDisable: false, contextWindow: 128000 } },
   { pattern: "*deepseek-r*",    caps: { reasoning: true, thinkingFormat: "deepseek", thinkingCanDisable: false, contextWindow: 128000 } },
@@ -279,10 +282,16 @@ export const PATTERN_CAPABILITIES = [
   { pattern: "*minimax-m2.7*",  caps: { reasoning: true, thinkingFormat: "minimax", thinkingCanDisable: false, contextWindow: 204800, maxOutput: 131072 } },
   { pattern: "*minimax*",       caps: { reasoning: true, thinkingFormat: "minimax", thinkingCanDisable: false, contextWindow: 200000, maxOutput: 131072 } },
 
-  // ── Xiaomi MiMo (vision, 1M / 262K ctx) ──────────────────────────
-  { pattern: "*mimo*v2.5*",     caps: { vision: true, audioInput: true, videoInput: true, contextWindow: 1048576, maxOutput: 131072 } },
-  { pattern: "*mimo*omni*",     caps: { vision: true, audioInput: true, contextWindow: 262144, maxOutput: 131072 } },
-  { pattern: "*mimo*",          caps: { vision: true, contextWindow: 262144, maxOutput: 131072 } },
+  // ── Xiaomi MiMo (per Xiaomi's own API + models.dev: ALL LLM variants reason;
+  //    v2.5 base = multimodal (text/image/audio/video); v2.5-pro & v2 = text-only;
+  //    omni = audio in; tts = audio-out, no tools) ────────────────────
+  { pattern: "*mimo*tts*",       caps: { tools: false, audioOutput: true, contextWindow: 8192, maxOutput: 8192 } },
+  { pattern: "*mimo*v2.5*pro*",  caps: { reasoning: true, contextWindow: 1048576, maxOutput: 131072 } },
+  { pattern: "*mimo*v2-pro*",    caps: { reasoning: true, contextWindow: 1048576, maxOutput: 131072 } },
+  { pattern: "*mimo*v2-flash*",  caps: { reasoning: true, contextWindow: 262144, maxOutput: 65536 } },
+  { pattern: "*mimo*v2.5*",      caps: { vision: true, audioInput: true, videoInput: true, reasoning: true, contextWindow: 1048576, maxOutput: 131072 } },
+  { pattern: "*mimo*omni*",      caps: { vision: true, audioInput: true, videoInput: true, reasoning: true, contextWindow: 262144, maxOutput: 131072 } },
+  { pattern: "*mimo*",           caps: { vision: true, reasoning: true, contextWindow: 262144, maxOutput: 131072 } },
 
   // ── Llama (4 = vision/1M; 3.x = text-only/128K) ──────────────────
   { pattern: "*llama-4*",       caps: { vision: true, contextWindow: 1000000 } },

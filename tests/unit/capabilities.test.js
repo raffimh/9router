@@ -55,4 +55,43 @@ describe("getCapabilitiesForModel", () => {
     expect(getCapabilitiesForModel("kiro", "gpt-5.6-luna-agentic")).toMatchObject(kiroGpt56Expected);
     expect(getCapabilitiesForModel("kiro", "gpt-5.6-sol-thinking-agentic")).toMatchObject(kiroGpt56Expected);
   });
+
+  // DeepSeek vision variants (deepseek-v4-flash-vision-exp): reasoning + vision,
+  // per DeepSeek's own API listing (input text+image, 1M ctx). Must beat *deepseek-v4*.
+  it("reports deepseek vision variants with vision + reasoning", () => {
+    for (const model of ["deepseek-v4-flash-vision-exp", "deepseek/deepseek-v4-flash-vision-exp"]) {
+      const caps = getCapabilitiesForModel("sumopod", model);
+      expect(caps.vision).toBe(true);
+      expect(caps.reasoning).toBe(true);
+      expect(caps.contextWindow).toBe(1000000);
+    }
+  });
+
+  // Xiaomi MiMo split (per Xiaomi's own API + models.dev): v2.5 base is the
+  // multimodal one; v2.5-pro / v2-pro / v2-flash are text-only — and ALL
+  // MiMo LLMs reason. TTS variants are audio-out with no tools.
+  it("reports MiMo v2.5 base as multimodal + reasoning", () => {
+    const caps = getCapabilitiesForModel("sumopod", "mimo-v2.5");
+    expect(caps).toMatchObject({ vision: true, audioInput: true, videoInput: true, reasoning: true, contextWindow: 1048576 });
+  });
+
+  it("reports MiMo v2.5 Pro as text-only WITH reasoning", () => {
+    for (const model of ["mimo-v2.5-pro", "mimo-v2.5-pro-ultraspeed"]) {
+      const caps = getCapabilitiesForModel("sumopod", model);
+      expect(caps.vision, `${model} is text-only per Xiaomi spec`).toBe(false);
+      expect(caps.reasoning, `${model} reasons per Xiaomi spec`).toBe(true);
+      expect(caps.contextWindow).toBe(1048576);
+    }
+  });
+
+  it("reports MiMo v2 pro / v2 flash as text-only reasoning models", () => {
+    expect(getCapabilitiesForModel("xiaomi", "mimo-v2-pro")).toMatchObject({ vision: false, reasoning: true, contextWindow: 1048576 });
+    expect(getCapabilitiesForModel("xiaomi", "mimo-v2-flash")).toMatchObject({ vision: false, reasoning: true, contextWindow: 262144 });
+  });
+
+  it("keeps MiMo TTS variants audio-out without tools", () => {
+    const caps = getCapabilitiesForModel("xiaomi", "mimo-v2.5-tts");
+    expect(caps).toMatchObject({ audioOutput: true, tools: false, contextWindow: 8192 });
+    expect(caps.reasoning).toBe(false);
+  });
 });
