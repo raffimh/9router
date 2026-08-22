@@ -29,6 +29,63 @@ function expectFullyPaired(envelope) {
   expect(missing, `functionCall ids without functionResponse: ${missing.join(",")}`).toEqual([]);
 }
 
+function modelContents(envelope) {
+  return (envelope?.request?.contents || []).filter((c) => c.role === "model");
+}
+
+describe("openai→antigravity thinking-only turns (Gemini 400 INVALID_ARGUMENT)", () => {
+  // A thinking turn truncated before any text/tool call is resent by clients as
+  // {content:"", reasoning_content}. Rendered as a MODEL content made solely of
+  // thought parts, Antigravity rejects the WHOLE request with 400 — poisoning
+  // every later request of the session until compaction removes the turn.
+  it("assistant reasoning-only turn is dropped from contents", () => {
+    const out = openaiToAntigravityRequest("gemini-3.7-flash-high", {
+      model: "x",
+      messages: [
+        { role: "system", content: SYSTEM },
+        { role: "user", content: "list files" },
+        { role: "assistant", content: "", reasoning_content: "I will enumerate the directory with ls and summarize." },
+        { role: "user", content: "Reply OK" },
+      ],
+    }, true, null);
+    const models = modelContents(out);
+    expect(models.length, "thought-only MODEL content leaked into contents").toBe(0);
+  });
+
+  it("assistant reasoning + text keeps the thought parts", () => {
+    const out = openaiToAntigravityRequest("gemini-3.7-flash-high", {
+      model: "x",
+      messages: [
+        { role: "system", content: SYSTEM },
+        { role: "user", content: "list files" },
+        { role: "assistant", content: "Two files found.", reasoning_content: "Enumerating with ls." },
+        { role: "user", content: "Reply OK" },
+      ],
+    }, true, null);
+    const models = modelContents(out);
+    expect(models.length).toBe(1);
+    expect(models[0].parts.some((p) => p.thought === true)).toBe(true);
+    expect(models[0].parts.some((p) => p.text === "Two files found.")).toBe(true);
+  });
+
+  it("assistant reasoning + tool_calls keeps the thought parts", () => {
+    const out = openaiToAntigravityRequest("gemini-3.7-flash-high", {
+      model: "x",
+      messages: [
+        { role: "system", content: SYSTEM },
+        { role: "user", content: "list files" },
+        { role: "assistant", content: "", reasoning_content: "Running ls.", tool_calls: [{ id: "bash-1-0", type: "function", function: { name: "bash", arguments: "{\"command\":\"ls\"}" } }] },
+        { role: "tool", tool_call_id: "bash-1-0", content: "file1" },
+        { role: "user", content: "Reply OK" },
+      ],
+      tools: TOOLS,
+    }, true, null);
+    const models = modelContents(out);
+    expect(models.length).toBe(1);
+    expect(models[0].parts.some((p) => p.functionCall)).toBe(true);
+  });
+});
+
 describe("openai→antigravity tool pairing (long-session 400 INVALID_ARGUMENT)", () => {
   it("tool result with empty string content still gets a functionResponse", () => {
     const out = openaiToAntigravityRequest("gemini-3.7-flash-high", {

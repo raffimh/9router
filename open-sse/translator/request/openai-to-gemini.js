@@ -45,6 +45,15 @@ function normalizeGeminiContents(contents) {
   return out;
 }
 
+// A MODEL content made only of thought parts (+ bare thoughtSignature filler)
+// is rejected by Antigravity with 400 INVALID_ARGUMENT. Such history entries
+// appear when a thinking turn was truncated before emitting any text or tool
+// call (clients resend them as {content:"", reasoning_content}). Only push
+// assistant contents that carry at least one non-thought text/functionCall part.
+function hasSubstantiveParts(parts) {
+  return parts.some(p => !p.thought && (p.text || p.functionCall));
+}
+
 // Core: Convert OpenAI request to Gemini format (base for all variants)
 function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG_SIGNATURE) {
   const result = {
@@ -148,7 +157,7 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
             toolCallIds.push(tc.id);
           }
 
-          if (parts.length > 0) {
+          if (hasSubstantiveParts(parts)) {
             result.contents.push({ role: GEMINI_ROLE.MODEL, parts });
           }
 
@@ -201,7 +210,7 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
           if (toolParts.length > 0) {
             result.contents.push({ role: GEMINI_ROLE.USER, parts: toolParts });
           }
-        } else if (parts.length > 0) {
+        } else if (hasSubstantiveParts(parts)) {
           result.contents.push({ role: GEMINI_ROLE.MODEL, parts });
         }
       }
