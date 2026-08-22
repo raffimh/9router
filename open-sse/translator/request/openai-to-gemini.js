@@ -136,7 +136,7 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
           for (const tc of msg.tool_calls) {
             if (tc.type !== OPENAI_BLOCK.FUNCTION) continue;
 
-            const args = tryParseJSON(tc.function?.arguments || "{}");
+            const args = tryParseJSON(tc.function?.arguments || "{}") ?? {};
             parts.push({
               thoughtSignature: signature,
               functionCall: {
@@ -152,43 +152,54 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
             result.contents.push({ role: GEMINI_ROLE.MODEL, parts });
           }
 
-          // Check if there are actual tool responses in the next messages
-          const hasActualResponses = toolCallIds.some(fid => toolResponses[fid]);
-
-          if (hasActualResponses) {
-            const toolParts = [];
-            for (const fid of toolCallIds) {
-              if (!toolResponses[fid]) continue;
-
-              let name = tcID2Name[fid];
-              if (!name) {
-                const idParts = fid.split("-");
-                if (idParts.length > 2) {
-                  name = idParts.slice(0, -2).join("-");
-                } else {
-                  name = fid;
-                }
+          // Gemini rejects the whole request with 400 INVALID_ARGUMENT when a
+          // functionCall part has no matching functionResponse part. Empty (""
+          // or null) tool results and aborted runs (no result message at all)
+          // previously produced dangling calls that poisoned every later
+          // request of the session. Always answer each call: real result when
+          // present, synthetic placeholder otherwise.
+          const toolParts = [];
+          for (const fid of toolCallIds) {
+            let name = tcID2Name[fid];
+            if (!name) {
+              const idParts = fid.split("-");
+              if (idParts.length > 2) {
+                name = idParts.slice(0, -2).join("-");
+              } else {
+                name = fid;
               }
+            }
 
-              let resp = toolResponses[fid];
-              let parsedResp = tryParseJSON(resp);
-              if (parsedResp === null) {
-                parsedResp = { result: resp };
-              } else if (typeof parsedResp !== "object") {
-                parsedResp = { result: parsedResp };
-              }
-
+            if (!(fid in toolResponses)) {
               toolParts.push({
                 functionResponse: {
                   id: fid,
                   name: sanitizeGeminiFunctionName(name),
-                  response: { result: parsedResp }
+                  response: { result: "(no tool result returned)" }
                 }
               });
+              continue;
             }
-            if (toolParts.length > 0) {
-              result.contents.push({ role: GEMINI_ROLE.USER, parts: toolParts });
+
+            let resp = toolResponses[fid];
+            if (resp === null || resp === undefined) resp = "";
+            let parsedResp = tryParseJSON(resp);
+            if (parsedResp === null) {
+              parsedResp = { result: resp };
+            } else if (typeof parsedResp !== "object") {
+              parsedResp = { result: parsedResp };
             }
+
+            toolParts.push({
+              functionResponse: {
+                id: fid,
+                name: sanitizeGeminiFunctionName(name),
+                response: { result: parsedResp }
+              }
+            });
+          }
+          if (toolParts.length > 0) {
+            result.contents.push({ role: GEMINI_ROLE.USER, parts: toolParts });
           }
         } else if (parts.length > 0) {
           result.contents.push({ role: GEMINI_ROLE.MODEL, parts });
