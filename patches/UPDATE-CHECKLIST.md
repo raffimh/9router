@@ -15,6 +15,7 @@
 | 2 | **Qoder quota-112 disable** (`src/sse/services/auth.js`) | Qoder 403/code 112 (quota habis) hanya kena cooldown 2 menit → akun mati dipilih terus | ❌ Masih bug |
 | 3 | **Antigravity 403 fingerprint/host** (`open-sse/providers/shared.js`, MITM) | Host daily lama dan User-Agent `darwin/arm64` dapat ditolak Google, terutama di Windows | ❌ Masih bug |
 | 4 | **Antigravity dangling functionCall + thinking-only content** (`translator/request/openai-to-gemini.js`) | (a) Tool result kosong (`content:""`/`null`) atau tool call tanpa hasil → `functionCall` tanpa pasangan `functionResponse`; (b) Turn thinking yang terpotong (dikirim client sebagai `{content:"", reasoning_content}`) → content MODEL berisi hanya thought-part. Keduanya → Gemini **400 INVALID_ARGUMENT** permanen untuk session itu sampai `/compact` | ❌ Masih bug |
+| 5 | **Capabilities: deepseek-vision + Xiaomi MiMo** (`providers/capabilities.js`) | `deepseek-v4-flash-vision-exp` tidak kena vision (ditelan pattern `*deepseek-v4*` text-only). MiMo: semua varian LLM punya reasoning tapi tidak diset; `mimo-v2.5-pro` keliru dikasih vision (aslinya **text-only** — yang multimodal adalah `mimo-v2.5` base); varian TTS tanya tools/audio-out | ❌ Masih bug |
 
 Semua fix hidup di **satu branch integrasi: `patched`** di fork [`raffimh/9router`](https://github.com/raffimh/9router).
 
@@ -79,6 +80,17 @@ if ($content -match 'hasActualResponses') {
     Write-Output "⚠️  Antigravity pairing: BUG MASIH ADA → patch dibutuhkan"
 } else {
     Write-Output "✅ Antigravity pairing: upstream sudah fix → skip patch-nya"
+}
+```
+
+### 1d. Capabilities deepseek-vision / MiMo
+
+```powershell
+$content = (Invoke-WebRequest "https://raw.githubusercontent.com/decolua/9router/main/open-sse/providers/capabilities.js" -UseBasicParsing).Content
+if ($content -match '\*deepseek\*vision\*' -and $content -match '\*mimo\*v2\.5\*pro\*') {
+    Write-Output "✅ Capabilities vision/MiMo: upstream sudah fix → skip patch-nya"
+} else {
+    Write-Output "⚠️  Capabilities vision/MiMo: BUG MASIH ADA → patch dibutuhkan"
 }
 ```
 
@@ -160,6 +172,18 @@ gunakan **prompt agent harness** atau **build dari fork**:
 > 3. Perubahan inti: (a) keberadaan response dicek `fid in toolResponses` (bukan truthiness), (b) tool result `""`/`null` tetap menghasilkan `functionResponse` `{result:""}`, (c) tool call tanpa pesan hasil sama sekali mendapat `functionResponse` sintetis `"(no tool result returned)"`, (d) `args` JSON tak valid fallback `{}`.
 > 4. Verifikasi: string `no tool result returned` muncul di chunk tersebut.
 
+### 2e. Capabilities deepseek-vision / MiMo → patch file build minified
+
+Tabel pattern ada di **chunk `412.js` dan `6306.js`** (nama bisa berbeda — cari chunk
+yang mengandung `*mimo*v2.5*`). Backup dulu, lalu dua penggantian:
+
+> Re-apply patch capabilities deepseek-vision + MiMo ke build 9router:
+> 1. Cari chunk yang mengandung `*mimo*v2.5*` (ada 2 file). Backup keduanya.
+> 2. Sebelum `{pattern:"*deepseek-v4*",caps:{reasoning:!0,thinkingFormat:"deepseek",contextWindow:1e6,maxOutput:384e3}}` sisipkan `{pattern:"*deepseek*vision*",caps:{vision:!0,reasoning:!0,thinkingFormat:"deepseek",contextWindow:1e6,maxOutput:384e3}},`
+> 3. Ganti tiga entri mimo (`*mimo*v2.5*`, `*mimo*omni*`, `*mimo*`) dengan tujuh entri: `*mimo*tts*` (tools:!1,audioOutput:!0,8192), `*mimo*v2.5*pro*` & `*mimo*v2-pro*` (reasoning:!0,1048576), `*mimo*v2-flash*` (reasoning:!0,262144), `*mimo*v2.5*` (vision+audio+video+reasoning,1048576), `*mimo*omni*` (vision+audio+reasoning,262144), `*mimo*` (vision+reasoning,262144). Urutan penting: pro/tts sebelum v2.5.
+> 4. `node --check` kedua file; verifikasi `*deepseek*vision*` dan `*mimo*v2.5*pro*` muncul.
+> 5. Referensi source: commit "fix(capabilities): correct deepseek-vision and Xiaomi MiMo patterns".
+
 ---
 
 ## Langkah 3 — Restart 9router
@@ -180,6 +204,7 @@ npx 9router start
 | Qoder 112 | Cek chunk build mengandung string `Qoder quota exhausted` | String ditemukan |
 | Antigravity 403 | Cek log request dan host MITM setelah restart | Chat diarahkan ke host sandbox, tanpa `CONSUMER_INVALID` |
 | Antigravity pairing | Session panjang dengan banyak tool call (termasuk tool ber-output kosong) via `antigravity/gemini-*` | Tidak ada 400 INVALID_ARGUMENT permanen; `/compact` tidak lagi dibutuhkan |
+| Capabilities vision/MiMo | `curl $NINEROUTER_URL/v1/models` → cek caps `sumopod/mimo-v2.5-pro` dan model `*deepseek*vision*` | mimo-v2.5-pro: `reasoning:true, vision:false`; deepseek-vision: `vision:true, reasoning:true` |
 
 ```powershell
 # Cek cepat di build
