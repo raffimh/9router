@@ -16,6 +16,7 @@
 | 3 | **Antigravity 403 fingerprint/host** (`open-sse/providers/shared.js`, MITM) | Host daily lama dan User-Agent `darwin/arm64` dapat ditolak Google, terutama di Windows | ❌ Masih bug |
 | 4 | **Antigravity dangling functionCall + thinking-only content** (`translator/request/openai-to-gemini.js`) | (a) Tool result kosong (`content:""`/`null`) atau tool call tanpa hasil → `functionCall` tanpa pasangan `functionResponse`; (b) Turn thinking yang terpotong (dikirim client sebagai `{content:"", reasoning_content}`) → content MODEL berisi hanya thought-part. Keduanya → Gemini **400 INVALID_ARGUMENT** permanen untuk session itu sampai `/compact` | ❌ Masih bug |
 | 5 | **Capabilities: deepseek-vision + Xiaomi MiMo** (`providers/capabilities.js`) | `deepseek-v4-flash-vision-exp` tidak kena vision (ditelan pattern `*deepseek-v4*` text-only). MiMo: semua varian LLM punya reasoning tapi tidak diset; `mimo-v2.5-pro` keliru dikasih vision (aslinya **text-only** — yang multimodal adalah `mimo-v2.5` base); varian TTS tanya tools/audio-out | ❌ Masih bug |
+| 6 | **Usage hilang saat client abort** (`open-sse/utils/stream.js`) | `onStreamComplete`/`saveUsageStats` hanya dipanggil di `flush()` transform stream. Codex menutup koneksi SSE begitu menerima `response.completed` (`DISCONNECT: ResponseAborted`) → `reader.cancel()`+`writer.abort()` melewati `flush()` → usage Antigravity/Gemini **tidak pernah tersimpan ke DB**, sementara provider cepat (glm) selesai normal lewat `flush()` dan tercatat | ❌ Masih bug |
 
 Semua fix hidup di **satu branch integrasi: `patched`** di fork [`raffimh/9router`](https://github.com/raffimh/9router).
 
@@ -26,7 +27,8 @@ master (= upstream v0.5.55, sync otomatis)
       ├── docs(patches): file patch + checklist ini
       ├── fix(auth): disable Qoder connection on quota exhaustion
       ├── fix(antigravity): use sandbox host + platform-matched IDE fingerprint
-      └── fix(antigravity): always pair functionCall with functionResponse
+      ├── fix(antigravity): always pair functionCall with functionResponse
+      └── fix(stream): finalize usage accounting in cancel() when client aborts SSE stream
 ```
 
 > 📌 Fix lama tidak akan hilang: semuanya commit permanen di `patched`.
@@ -91,6 +93,17 @@ if ($content -match '\*deepseek\*vision\*' -and $content -match '\*mimo\*v2\.5\*
     Write-Output "✅ Capabilities vision/MiMo: upstream sudah fix → skip patch-nya"
 } else {
     Write-Output "⚠️  Capabilities vision/MiMo: BUG MASIH ADA → patch dibutuhkan"
+}
+```
+
+### 1e. Usage saat client abort
+
+```powershell
+$content = (Invoke-WebRequest "https://raw.githubusercontent.com/decolua/9router/main/open-sse/utils/stream.js" -UseBasicParsing).Content
+if ($content -match 'finalizeUsageTracking') {
+    Write-Output "✅ Cancel-usage: upstream sudah fix → skip patch-nya"
+} else {
+    Write-Output "⚠️  Cancel-usage: BUG MASIH ADA → patch dibutuhkan"
 }
 ```
 
@@ -184,9 +197,21 @@ yang mengandung `*mimo*v2.5*`). Backup dulu, lalu dua penggantian:
 > 4. `node --check` kedua file; verifikasi `*deepseek*vision*` dan `*mimo*v2.5*pro*` muncul.
 > 5. Referensi source: commit "fix(capabilities): correct deepseek-vision and Xiaomi MiMo patterns".
 
----
+### 2f. Usage saat client abort → patch build minified
 
-## Langkah 3 — Restart 9router
+Fix mengubah `open-sse/utils/stream.js`: logika finalisasi usage dipindah ke helper
+`finalizeUsageTracking()` (guard sekali-jalan) yang dipanggil dari `flush()` DAN
+hook `cancel()` baru pada TransformStream. Di build npm, kodenya ada di **chunk
+`8895.js`** (nama bisa berbeda — cari chunk yang mengandung `Error in flush`).
+
+> Re-apply patch fix cancel-usage ke build 9router:
+> 1. Cari chunk yang mengandung `Error in flush` di `.next-cli-build\server\chunks`. Backup (sudah ada `.bak-cancel-usage` untuk 8895.js v0.5.55).
+> 2. Referensi source: https://github.com/raffimh/9router branch `patched`, commit "fix(stream): finalize usage accounting in cancel() when client aborts SSE stream" — `open-sse/utils/stream.js` (helper `finalizeUsageTracking` + hook `cancel`).
+> 3. Perubahan inti minified (nama variabel bisa beda per versi): (a) deklarasikan `_sf=!1` + arrow `_fin` setelah deklarasi `streamDoneSent` — isi: `trackPendingRequest(...,!1)`, estimasi usage bila belum ada, `logUsage`/`appendRequestLog`, panggil `onStreamComplete(content/thinking, usage, ttft)`; (b) hapus pemanggilan `trackPendingRequest` dan blok log/onStreamComplete duplikat di kedua cabang `flush`; (c) tambahkan method `cancel(a){dbg(...),_fin()}` pada object literal TransformStream.
+> 4. Verifikasi: `node --check <chunk>` lulus; string `Error in finalizeUsageTracking` dan `cancel | provider=` muncul di chunk.
+> 5. Regression test: `tests/unit/stream-cancel-usage.test.js` (4 test) di repo tests.
+
+---
 
 ```powershell
 Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match '9router' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
@@ -205,6 +230,7 @@ npx 9router start
 | Antigravity 403 | Cek log request dan host MITM setelah restart | Chat diarahkan ke host sandbox, tanpa `CONSUMER_INVALID` |
 | Antigravity pairing | Session panjang dengan banyak tool call (termasuk tool ber-output kosong) via `antigravity/gemini-*` | Tidak ada 400 INVALID_ARGUMENT permanen; `/compact` tidak lagi dibutuhkan |
 | Capabilities vision/MiMo | `curl $NINEROUTER_URL/v1/models` → cek caps `sumopod/mimo-v2.5-pro` dan model `*deepseek*vision*` | mimo-v2.5-pro: `reasoning:true, vision:false`; deepseek-vision: `vision:true, reasoning:true` |
+| Cancel-usage | Jalankan sesi Codex via `antigravity/*` (pastikan log `DISCONNECT: ResponseAborted` muncul), lalu cek Usage/History di dashboard | Baris usage model antigravity **muncul** dengan token IN/OUT meski stream di-abort client |
 
 ```powershell
 # Cek cepat di build
@@ -289,13 +315,29 @@ non-thought (text/functionCall).
 
 Regresi dijaga oleh `tests/translator/openai-to-antigravity-pairing.test.js` (8 test).
 
+### Usage hilang saat client abort
+Semua pencatatan usage streaming (`saveUsageStats` via `onStreamComplete`,
+`trackPendingRequest`, `appendRequestLog`) hanya dipicu dari `flush()` pada
+TransformStream di `open-sse/utils/stream.js`. Per spec Streams, `flush()` hanya
+jalan kalau upstream berakhir normal; ketika client membatalkan stream
+(`reader.cancel()` + `writer.abort()` di `createDisconnectAwareStream`),
+`flush()` DILEWATI. Codex menutup SSE begitu kebutuhannya terpenuhi
+(`DISCONNECT: ResponseAborted`), dan provider lambat-nya-selesai (Antigravity
+Gemini) paling sering kena: usage-nya tidak pernah masuk DB, sedangkan provider
+cepat (glm) sempat menyelesaikan `flush()` sebelum abort sehingga tercatat.
+Fix: helper `finalizeUsageTracking()` (guard sekali-jalan) dipanggil dari
+`flush()` dan dari hook `cancel()` baru; estimasi token tetap jalan bila
+provider belum mengirim usage.
+
+Regresi dijaga oleh `tests/unit/stream-cancel-usage.test.js` (4 test).
+
 ---
 
 ## 🗂️ Struktur branch fork
 
 | Branch | Isi | Status |
 |---|---|---|
-| `patched` | **Semua fix** (vision + qoder + antigravity 403 + antigravity pairing + docs ini) | ✅ Branch kerja utama |
+| `patched` | **Semua fix** (vision + qoder + antigravity 403 + antigravity pairing + capabilities + cancel-usage + docs ini) | ✅ Branch kerja utama |
 | `patch/fix-vision-trimmer` | Fix vision saja (calon PR ke upstream) | Referensi |
 | `fix-qoder-112-disable-account` | Fix qoder saja (calon PR ke upstream) | Referensi |
 | ~~`qoder-403-112-fallback`~~ | Dihapus — bagian SSE probe-nya sudah diserap upstream v0.5.55 | 🗑️ (arsip lokal: tag `archive/qoder-403-112-fallback`) |
