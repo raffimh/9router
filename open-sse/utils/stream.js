@@ -76,6 +76,55 @@ export function createSSEStream(options = {}) {
   let openAIResponsesDoneSent = false;
   let streamDoneSent = false;  // track duplicate [DONE] across transform + flush
 
+  // Whether usage accounting already ran. flush() and cancel() are mutually
+  // exclusive per the Streams spec, but the flag guards against any edge path
+  // (e.g. pipeTo error propagation) that could otherwise double-record usage.
+  let streamFinalized = false;
+
+  // Finalize usage accounting exactly once — from flush() on normal upstream end,
+  // or from cancel() when the downstream client aborts mid-stream (e.g. Codex
+  // closing the SSE connection right after response.completed; logged upstream as
+  // DISCONNECT: ResponseAborted). Without the cancel path, usage stats, the
+  // request-log row, and pending-request tracking are silently lost on every
+  // client disconnect, because writer.abort()/reader.cancel() skip flush().
+  const finalizeUsageTracking = () => {
+    if (streamFinalized) return;
+    streamFinalized = true;
+
+    trackPendingRequest(model, provider, connectionId, false);
+
+    try {
+      const isPassthrough = mode === STREAM_MODE.PASSTHROUGH;
+      const currentUsage = isPassthrough ? usage : state?.usage;
+
+      if (!hasValidUsage(currentUsage) && totalContentLength > 0) {
+        const estimated = estimateUsage(body, totalContentLength, isPassthrough ? FORMATS.OPENAI : sourceFormat);
+        if (isPassthrough) {
+          usage = estimated;
+        } else {
+          state.usage = estimated;
+        }
+      }
+
+      const finalUsage = isPassthrough ? usage : state?.usage;
+
+      if (hasValidUsage(finalUsage)) {
+        logUsage(isPassthrough ? provider : (state?.provider || targetFormat), finalUsage, model, connectionId, apiKey);
+      } else {
+        appendRequestLog({ model, provider, connectionId, tokens: null, status: "200 OK" }).catch(() => { });
+      }
+
+      if (onStreamComplete) {
+        onStreamComplete({
+          content: accumulatedContent,
+          thinking: accumulatedThinking
+        }, finalUsage, ttftAt);
+      }
+    } catch (error) {
+      console.log("Error in finalizeUsageTracking:", error);
+    }
+  };
+
   return new TransformStream({
     transform(chunk, controller) {
       if (!ttftAt) ttftAt = Date.now();
@@ -340,7 +389,6 @@ export function createSSEStream(options = {}) {
     flush(controller) {
       const evtSummary = Object.entries(eventTypeCounts).map(([k, v]) => `${k}=${v}`).join(",") || "none";
       dbg("SSE", `flush | provider=${provider} | model=${model} | recvLines=${sseLineCount} | emitted=${sseEmittedCount} | events=[${evtSummary}]`);
-      trackPendingRequest(model, provider, connectionId, false);
       try {
         const remaining = decoder.decode();
         if (remaining) buffer += remaining;
@@ -355,16 +403,6 @@ export function createSSEStream(options = {}) {
             controller.enqueue(sharedEncoder.encode(output));
           }
 
-          if (!hasValidUsage(usage) && totalContentLength > 0) {
-            usage = estimateUsage(body, totalContentLength, FORMATS.OPENAI);
-          }
-
-          if (hasValidUsage(usage)) {
-            logUsage(provider, usage, model, connectionId, apiKey);
-          } else {
-            appendRequestLog({ model, provider, connectionId, tokens: null, status: "200 OK" }).catch(() => { });
-          }
-          
           // IMPORTANT: In passthrough mode we still must terminate the SSE stream.
           // Some clients (e.g. OpenClaw) expect the OpenAI-style sentinel:
           //   data: [DONE]\n\n
@@ -377,12 +415,7 @@ export function createSSEStream(options = {}) {
             controller.enqueue(sharedEncoder.encode(doneOutput));
           }
 
-          if (onStreamComplete) {
-            onStreamComplete({
-              content: accumulatedContent,
-              thinking: accumulatedThinking
-            }, usage, ttftAt);
-          }
+          finalizeUsageTracking();
           return;
         }
 
@@ -444,25 +477,18 @@ export function createSSEStream(options = {}) {
           streamDoneSent = true;
         }
 
-        if (!hasValidUsage(state?.usage) && totalContentLength > 0) {
-          state.usage = estimateUsage(body, totalContentLength, sourceFormat);
-        }
-
-        if (hasValidUsage(state?.usage)) {
-          logUsage(state.provider || targetFormat, state.usage, model, connectionId, apiKey);
-        } else {
-          appendRequestLog({ model, provider, connectionId, tokens: null, status: "200 OK" }).catch(() => { });
-        }
-        
-        if (onStreamComplete) {
-          onStreamComplete({
-            content: accumulatedContent,
-            thinking: accumulatedThinking
-          }, state?.usage, ttftAt);
-        }
+        finalizeUsageTracking();
       } catch (error) {
         console.log("Error in flush:", error);
       }
+    },
+
+    // Client aborted mid-stream (readable cancelled). The controller is unusable
+    // here, so no further output can be enqueued — but usage accounting and
+    // pending-request tracking must still be finalized.
+    cancel(reason) {
+      dbg("SSE", `cancel | provider=${provider} | model=${model} | reason=${reason?.message || reason}`);
+      finalizeUsageTracking();
     }
   });
 }
