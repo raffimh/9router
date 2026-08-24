@@ -19,6 +19,7 @@
 | 6 | **Usage hilang saat client abort** (`open-sse/utils/stream.js`) | `onStreamComplete`/`saveUsageStats` hanya dipanggil di `flush()` transform stream. Codex menutup koneksi SSE begitu menerima `response.completed` (`DISCONNECT: ResponseAborted`) → `reader.cancel()`+`writer.abort()` melewati `flush()` → usage Antigravity/Gemini **tidak pernah tersimpan ke DB**, sementara provider cepat (glm) selesai normal lewat `flush()` dan tercatat | ❌ Masih bug |
 | 7 | **Turn reasoning-only menghentikan task diam-diam** (`open-sse/utils/stream.js`) | Gemini flash kadang stream thought parts lalu finish (STOP, **bukan** MAX_TOKENS) tanpa text/tool call. `response.completed` dengan output kosong → Codex menganggap turn sukses → `task_complete` + `last_agent_message: null` → task berhenti diam-diam di tengah pekerjaan. Terverifikasi live (session Codex 22:55, 178k ctx, 3288 token murni thinking). **Effort level tidak mempengaruhi** — quirk stokastik model, medium tetap bisa kena | ❌ Masih bug |
 | 8 | **Hang stream antigravity tidak retryable + deteksi lambat** (`streamHandler.js` + `streamingHandler.js` + `registry/antigravity.js`) | (a) `response.failed` sintetis (onAbortTerminal) hanya dipasang untuk Responses **passthrough** — jalur translate (codex→antigravity) saat stall/abort ditutup polos tanpa terminal event → Codex tidak retry; (b) watchdog stall tunggal 6 menit tidak membedakan koneksi hang (0 byte; TTFT sehat antigravity ~4 detik) vs silence thinking sah di tengah stream. Terverifikasi live: 0 byte selama 6 menit (IN 276k) → task mati | ❌ Masih bug |
+| 9 | **`response.completed` tanpa usage → Codex tidak pernah auto-compact** (`translator/response/openai-responses.js`) | Konverter openai→responses tidak menyertakan `response.usage` di `response.completed`. Codex membaca field ini untuk `token_count` (di session live semua `info:null`) dan pemicu auto-compaction. Tanpa itu context terus membengkak melewati window katalog (live: 297k dari 280k!), yang juga menaikkan probabilitas quirk reasoning-only gemini | ❌ Masih bug |
 
 Semua fix hidup di **satu branch integrasi: `patched`** di fork [`raffimh/9router`](https://github.com/raffimh/9router).
 
@@ -263,6 +264,22 @@ Di build npm:
 > Verifikasi: `node --check` semua chunk; string `stallFirstByteMs` muncul di 8895 + 3 chunk registry.
 > Regression test: `tests/unit/stall-first-byte.test.js` (2 test).
 
+### 2i. Usage di response.completed → patch build minified
+
+Fix mengubah `open-sse/translator/response/openai-responses.js`: helper `toResponsesUsage`
+(konversi prompt_tokens/cached/reasoning → bentuk Responses) + `sendCompleted`
+menyertakan `usage` di `response.completed`; capture `chunk.usage` intermediate
+di entry streaming. Di build npm: **chunk `8499.js`** (cari fungsi yang meng-emit
+`response.completed` dengan `status:"completed",background:!1,error:null` —
+sendCompleted minified).
+
+> Re-apply patch usage-in-completed ke build 9router:
+> 1. Cari chunk yang mengandung `completedSent` (8499.js v0.5.55). Backup (`.bak-usage`).
+> 2. Referensi source: fork commit "fix(responses): embed usage in response.completed so clients track context".
+> 3. Inti: di sendCompleted, sebelum emit, baca `state.usage`; bila ada, konversi ke `{input_tokens, input_tokens_details:{cached_tokens}, output_tokens, output_tokens_details:{reasoning_tokens}, total_tokens}` dan spread ke object `response` (`..._ru?{usage:_ru}:{}`).
+> 4. Verifikasi: `node --check`; test end-to-end — event `token_count` Codex kini berisi info (bukan null), dan di context besar Codex otomatis memicu "compacting".
+> 5. Regression test: `tests/unit/reasoning-only-turn.test.js` (test "embeds token usage").
+
 ---
 
 ## Langkah 3 — Restart 9router
@@ -287,6 +304,7 @@ npx 9router start
 | Cancel-usage | Jalankan sesi Codex via `antigravity/*` (pastikan log `DISCONNECT: ResponseAborted` muncul), lalu cek Usage/History di dashboard | Baris usage model antigravity **muncul** dengan token IN/OUT meski stream di-abort client |
 | Reasoning-only turn | Sesi Codex panjang via `antigravity/gemini-*`; kalau model kena quirk reasoning-only, log 9router menampilkan `reasoning-only turn ... replacing response.completed with response.failed` | Codex me-retry otomatis ("stream error; retrying") dan task **berlanjut**, tidak berhenti diam-diam |
 | Stall retryable + first-byte | Stream antigravity hang (0 byte) → log `STALL TIMEOUT 120000ms | chunks=0`; stream stall di tengah tetap 360000ms | Hang terdeteksi 2 menit (bukan 6) dan Codex menerima `response.failed` → auto-retry |
+| Usage di response.completed | Session Codex via 9router: event `token_count` di rollout kini berisi info; pada context mendekati window, Codex otomatis memicu compaction ("compacting…") | `token_count.info` tidak lagi null; prompt token berhenti tumbuh tak terbatas |
 
 ```powershell
 # Cek cepat di build
