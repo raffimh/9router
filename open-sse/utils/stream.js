@@ -14,6 +14,10 @@ export { SSE_DONE, SSE_HEADERS, SSE_HEADERS_NO_BUFFER };
 // sharedEncoder is stateless — safe to share across streams
 const sharedEncoder = new TextEncoder();
 
+// Gemini-family wire formats share the thought-part streaming quirk where a turn
+// can finish with reasoning only (no text, no function call).
+const GEMINI_FAMILY_FORMATS = new Set([FORMATS.GEMINI, FORMATS.GEMINI_CLI, FORMATS.VERTEX, FORMATS.ANTIGRAVITY]);
+
 /**
  * Stream modes
  */
@@ -363,6 +367,35 @@ export function createSSEStream(options = {}) {
             // Filter empty chunks
             if (!hasValuableContent(item, sourceFormat)) {
               continue; // Skip this empty chunk
+            }
+
+            // Gemini-family reasoning-only turn: the model streamed thought parts
+            // then finished (STOP, not MAX_TOKENS) without any text or tool call.
+            // Clients like Codex treat response.completed with no output as a
+            // successful-but-empty turn and end the task silently
+            // (task_complete, last_agent_message: null). Replace the terminal
+            // event with a retryable response.failed so the client re-rolls the
+            // request instead of stopping mid-task.
+            if (
+              sourceFormat === FORMATS.OPENAI_RESPONSES &&
+              GEMINI_FAMILY_FORMATS.has(targetFormat) &&
+              !streamDoneSent &&
+              item?.event === "response.completed" &&
+              accumulatedContent.length === 0 &&
+              !(state?.geminiToolCallCount > 0) &&
+              accumulatedThinking.length > 0
+            ) {
+              dbg("SSE", `reasoning-only turn | provider=${provider} | model=${model} | thinking=${accumulatedThinking.length} chars | replacing response.completed with response.failed`);
+              const failedOutput = formatIncompleteOpenAIResponsesStreamFailure();
+              reqLogger?.appendConvertedChunk?.(failedOutput);
+              controller.enqueue(sharedEncoder.encode(failedOutput));
+              const doneOutput = "data: [DONE]\n\n";
+              reqLogger?.appendConvertedChunk?.(doneOutput);
+              controller.enqueue(sharedEncoder.encode(doneOutput));
+              openAIResponsesTerminalSeen = true;
+              streamDoneSent = true;
+              sseEmittedCount += 2;
+              continue;
             }
 
             // Inject estimated usage if finish chunk has no valid usage
