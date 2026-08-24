@@ -17,6 +17,7 @@
 | 4 | **Antigravity dangling functionCall + thinking-only content** (`translator/request/openai-to-gemini.js`) | (a) Tool result kosong (`content:""`/`null`) atau tool call tanpa hasil → `functionCall` tanpa pasangan `functionResponse`; (b) Turn thinking yang terpotong (dikirim client sebagai `{content:"", reasoning_content}`) → content MODEL berisi hanya thought-part. Keduanya → Gemini **400 INVALID_ARGUMENT** permanen untuk session itu sampai `/compact` | ❌ Masih bug |
 | 5 | **Capabilities: deepseek-vision + Xiaomi MiMo** (`providers/capabilities.js`) | `deepseek-v4-flash-vision-exp` tidak kena vision (ditelan pattern `*deepseek-v4*` text-only). MiMo: semua varian LLM punya reasoning tapi tidak diset; `mimo-v2.5-pro` keliru dikasih vision (aslinya **text-only** — yang multimodal adalah `mimo-v2.5` base); varian TTS tanya tools/audio-out | ❌ Masih bug |
 | 6 | **Usage hilang saat client abort** (`open-sse/utils/stream.js`) | `onStreamComplete`/`saveUsageStats` hanya dipanggil di `flush()` transform stream. Codex menutup koneksi SSE begitu menerima `response.completed` (`DISCONNECT: ResponseAborted`) → `reader.cancel()`+`writer.abort()` melewati `flush()` → usage Antigravity/Gemini **tidak pernah tersimpan ke DB**, sementara provider cepat (glm) selesai normal lewat `flush()` dan tercatat | ❌ Masih bug |
+| 7 | **Turn reasoning-only menghentikan task diam-diam** (`open-sse/utils/stream.js`) | Gemini flash kadang stream thought parts lalu finish (STOP, **bukan** MAX_TOKENS) tanpa text/tool call. `response.completed` dengan output kosong → Codex menganggap turn sukses → `task_complete` + `last_agent_message: null` → task berhenti diam-diam di tengah pekerjaan. Terverifikasi live (session Codex 22:55, 178k ctx, 3288 token murni thinking). **Effort level tidak mempengaruhi** — quirk stokastik model, medium tetap bisa kena | ❌ Masih bug |
 
 Semua fix hidup di **satu branch integrasi: `patched`** di fork [`raffimh/9router`](https://github.com/raffimh/9router).
 
@@ -28,7 +29,8 @@ master (= upstream v0.5.55, sync otomatis)
       ├── fix(auth): disable Qoder connection on quota exhaustion
       ├── fix(antigravity): use sandbox host + platform-matched IDE fingerprint
       ├── fix(antigravity): always pair functionCall with functionResponse
-      └── fix(stream): finalize usage accounting in cancel() when client aborts SSE stream
+      ├── fix(stream): finalize usage accounting in cancel() when client aborts SSE stream
+      └── fix(stream): replace terminal event on gemini-family reasoning-only turns
 ```
 
 > 📌 Fix lama tidak akan hilang: semuanya commit permanen di `patched`.
@@ -104,6 +106,17 @@ if ($content -match 'finalizeUsageTracking') {
     Write-Output "✅ Cancel-usage: upstream sudah fix → skip patch-nya"
 } else {
     Write-Output "⚠️  Cancel-usage: BUG MASIH ADA → patch dibutuhkan"
+}
+```
+
+### 1f. Turn reasoning-only
+
+```powershell
+$content = (Invoke-WebRequest "https://raw.githubusercontent.com/decolua/9router/main/open-sse/utils/stream.js" -UseBasicParsing).Content
+if ($content -match 'reasoning-only turn') {
+    Write-Output "✅ Reasoning-only: upstream sudah fix → skip patch-nya"
+} else {
+    Write-Output "⚠️  Reasoning-only: BUG MASIH ADA → patch dibutuhkan"
 }
 ```
 
@@ -211,7 +224,26 @@ hook `cancel()` baru pada TransformStream. Di build npm, kodenya ada di **chunk
 > 4. Verifikasi: `node --check <chunk>` lulus; string `Error in finalizeUsageTracking` dan `cancel | provider=` muncul di chunk.
 > 5. Regression test: `tests/unit/stream-cancel-usage.test.js` (4 test) di repo tests.
 
+### 2g. Turn reasoning-only → patch build minified
+
+Fix mengubah `open-sse/utils/stream.js`: saat item `response.completed` hendak
+di-emit pada stream gemini-family → openai-responses dan turn terbukti
+reasoning-only (accumulatedContent kosong, tidak ada tool call, thinking
+non-kosong), ganti terminal event dengan `response.failed` retryable
+(`formatIncompleteOpenAIResponsesStreamFailure`) + `[DONE]` supaya client
+(Codex) me-RETRY request, bukan menganggap turn sukses-kosong dan berhenti.
+Di build npm: chunk yang sama dengan patch #6 (**`8895.js`**, cari `Error in flush`).
+
+> Re-apply patch reasoning-only-turn ke build 9router:
+> 1. Cari chunk yang mengandung `Error in flush` (sama dengan patch #6). Backup (`.bak-ronly` sudah ada untuk 8895.js v0.5.55).
+> 2. Referensi source: https://github.com/raffimh/9router branch `patched`, commit "fix(stream): replace terminal event on gemini-family reasoning-only turns".
+> 3. Inti: di loop items translate-mode (setelah filter `hasValuableContent`, sebelum injeksi usage), tambahkan guard: `sourceFormat===OPENAI_RESPONSES && targetFormat∈{GEMINI,GEMINI_CLI,VERTEX,ANTIGRAVITY} && !streamDoneSent && item?.event==="response.completed" && accumulatedContent.length===0 && !(state?.geminiToolCallCount>0) && accumulatedThinking.length>0` → enqueue `formatIncompleteOpenAIResponsesStreamFailure()` + `data: [DONE]\n\n`, set `openAIResponsesTerminalSeen=streamDoneSent=true`, `continue`.
+> 4. Verifikasi: `node --check` lulus; string `reasoning-only turn` muncul di chunk.
+> 5. Regression test: `tests/unit/reasoning-only-turn.test.js` (4 test).
+
 ---
+
+## Langkah 3 — Restart 9router
 
 ```powershell
 Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match '9router' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
@@ -231,6 +263,7 @@ npx 9router start
 | Antigravity pairing | Session panjang dengan banyak tool call (termasuk tool ber-output kosong) via `antigravity/gemini-*` | Tidak ada 400 INVALID_ARGUMENT permanen; `/compact` tidak lagi dibutuhkan |
 | Capabilities vision/MiMo | `curl $NINEROUTER_URL/v1/models` → cek caps `sumopod/mimo-v2.5-pro` dan model `*deepseek*vision*` | mimo-v2.5-pro: `reasoning:true, vision:false`; deepseek-vision: `vision:true, reasoning:true` |
 | Cancel-usage | Jalankan sesi Codex via `antigravity/*` (pastikan log `DISCONNECT: ResponseAborted` muncul), lalu cek Usage/History di dashboard | Baris usage model antigravity **muncul** dengan token IN/OUT meski stream di-abort client |
+| Reasoning-only turn | Sesi Codex panjang via `antigravity/gemini-*`; kalau model kena quirk reasoning-only, log 9router menampilkan `reasoning-only turn ... replacing response.completed with response.failed` | Codex me-retry otomatis ("stream error; retrying") dan task **berlanjut**, tidak berhenti diam-diam |
 
 ```powershell
 # Cek cepat di build
@@ -331,13 +364,29 @@ provider belum mengirim usage.
 
 Regresi dijaga oleh `tests/unit/stream-cancel-usage.test.js` (4 test).
 
+### Turn reasoning-only menghentikan task diam-diam
+Gemini flash (terverifikasi pada `gemini-3.7-flash-high`, context 178k) kadang
+stream thought parts lalu berhenti dengan `finishReason: STOP` — **bukan**
+MAX_TOKENS (jatah 64k baru terpakai 3288) — tanpa menghasilkan text atau tool
+call. `response.completed` dengan output kosong diperlakukan Codex sebagai
+turn sukses: `task_complete` + `last_agent_message: null` → task berhenti
+di tengah pekerjaan tanpa error. Effort/thinking level tidak menghilangkan
+quirk ini (hanya mengubah probabilitas).
+Fix: di stream gemini-family → openai-responses, bila terminal event hendak
+terkirim dan turn terbukti reasoning-only, ganti dengan `response.failed`
+retryable (helper `formatIncompleteOpenAIResponsesStreamFailure`, kode
+`stream_disconnected`) + `[DONE]` → Codex me-retry request otomatis dan
+task berlanjut.
+
+Regresi dijaga oleh `tests/unit/reasoning-only-turn.test.js` (4 test).
+
 ---
 
 ## 🗂️ Struktur branch fork
 
 | Branch | Isi | Status |
 |---|---|---|
-| `patched` | **Semua fix** (vision + qoder + antigravity 403 + antigravity pairing + capabilities + cancel-usage + docs ini) | ✅ Branch kerja utama |
+| `patched` | **Semua fix** (vision + qoder + antigravity 403 + antigravity pairing + capabilities + cancel-usage + reasoning-only + docs ini) | ✅ Branch kerja utama |
 | `patch/fix-vision-trimmer` | Fix vision saja (calon PR ke upstream) | Referensi |
 | `fix-qoder-112-disable-account` | Fix qoder saja (calon PR ke upstream) | Referensi |
 | ~~`qoder-403-112-fallback`~~ | Dihapus — bagian SSE probe-nya sudah diserap upstream v0.5.55 | 🗑️ (arsip lokal: tag `archive/qoder-403-112-fallback`) |
