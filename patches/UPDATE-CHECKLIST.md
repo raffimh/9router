@@ -237,8 +237,9 @@ Di build npm: chunk yang sama dengan patch #6 (**`8895.js`**, cari `Error in flu
 > Re-apply patch reasoning-only-turn ke build 9router:
 > 1. Cari chunk yang mengandung `Error in flush` (sama dengan patch #6). Backup (`.bak-ronly` sudah ada untuk 8895.js v0.5.55).
 > 2. Referensi source: https://github.com/raffimh/9router branch `patched`, commit "fix(stream): replace terminal event on gemini-family reasoning-only turns".
-> 3. Inti: di loop items translate-mode (setelah filter `hasValuableContent`, sebelum injeksi usage), tambahkan guard: `sourceFormat===OPENAI_RESPONSES && targetFormat∈{GEMINI,GEMINI_CLI,VERTEX,ANTIGRAVITY} && !streamDoneSent && item?.event==="response.completed" && accumulatedContent.length===0 && !(state?.geminiToolCallCount>0) && accumulatedThinking.length>0` → enqueue `formatIncompleteOpenAIResponsesStreamFailure()` + `data: [DONE]\n\n`, set `openAIResponsesTerminalSeen=streamDoneSent=true`, `continue`.
-> 4. Verifikasi: `node --check` lulus; string `reasoning-only turn` muncul di chunk.
+> 3. Inti: (a) **hoist** ke scope fungsi (sebelum `return new TransformStream`): `const _gf = targetFormat∈{GEMINI,GEMINI_CLI,VERTEX,ANTIGRAVITY}`, `const _pv = provider`; (b) di loop items translate-mode (setelah filter `hasValuableContent`, sebelum injeksi usage), guard: `sourceFormat===OPENAI_RESPONSES && _gf && !streamDoneSent && item?.event==="response.completed" && accumulatedContent.length===0 && !(state?.geminiToolCallCount>0) && accumulatedThinking.length>0` → enqueue `formatIncompleteOpenAIResponsesStreamFailure()` + `data: [DONE]\n\n`, set `openAIResponsesTerminalSeen=streamDoneSent=true`, `continue`.
+>    ⚠️ **PENTING (pelajaran v1 → ReferenceError TDZ live):** di dalam loop items minified, nama scope-luar TER-SHADOW oleh deklarasi lokal di akhir body (`let c=formatSSE(...)`, `let p=parsedLine`, dst). JANGAN mereferensikan `c`/`p` mentah di dalam loop — selalu hoist ke const baru di scope fungsi dulu. String `reasoning-only turn` harus direferensikan via nama hoisted.
+> 4. Verifikasi: `node --check` lulus; string `reasoning-only turn` muncul di chunk; **dan** pastikan tidak ada referensi `c`/`p` telanjang di dalam blok guard.
 > 5. Regression test: `tests/unit/reasoning-only-turn.test.js` (4 test).
 
 ---
