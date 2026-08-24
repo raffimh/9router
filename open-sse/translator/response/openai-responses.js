@@ -33,6 +33,12 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
   const idx = choice.index || 0;
   const delta = choice.delta || {};
 
+  // Capture usage from intermediate OpenAI chunks (stream.js also merges provider
+  // usage into state.usage before translation; keep the latest non-null value)
+  if (chunk.usage && typeof chunk.usage === "object") {
+    state.usage = chunk.usage;
+  }
+
   // Emit initial events
   if (!state.started) {
     state.started = true;
@@ -365,9 +371,29 @@ function closeToolCall(state, emit, idx) {
   }
 }
 
+// Convert OpenAI-style usage to the Responses API usage shape embedded in
+// response.completed. Codex reads this to track context usage (token_count)
+// and trigger auto-compaction — without it the client never compacts.
+function toResponsesUsage(usage) {
+  if (!usage || typeof usage !== "object") return null;
+  const inputTokens = usage.prompt_tokens ?? usage.input_tokens ?? 0;
+  const outputTokens = usage.completion_tokens ?? usage.output_tokens ?? 0;
+  if (!inputTokens && !outputTokens) return null;
+  const cachedTokens = usage.cached_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0;
+  const reasoningTokens = usage.reasoning_tokens ?? usage.completion_tokens_details?.reasoning_tokens ?? 0;
+  return {
+    input_tokens: inputTokens,
+    input_tokens_details: { cached_tokens: cachedTokens },
+    output_tokens: outputTokens,
+    output_tokens_details: { reasoning_tokens: reasoningTokens },
+    total_tokens: usage.total_tokens ?? (inputTokens + outputTokens)
+  };
+}
+
 function sendCompleted(state, emit) {
   if (!state.completedSent) {
     state.completedSent = true;
+    const usage = toResponsesUsage(state.usage);
     emit("response.completed", {
       type: "response.completed",
       response: {
@@ -376,7 +402,8 @@ function sendCompleted(state, emit) {
         created_at: state.created,
         status: "completed",
         background: false,
-        error: null
+        error: null,
+        ...(usage ? { usage } : {})
       }
     });
   }

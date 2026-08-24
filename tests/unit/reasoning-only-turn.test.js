@@ -96,4 +96,21 @@ describe("reasoning-only turn termination (gemini -> openai-responses)", () => {
 
     expect(output).not.toContain("response.failed");
   });
+
+  it("embeds token usage in response.completed so clients can track context and compact", async () => {
+    const { output } = await runStream([
+      geminiLine({ candidates: [{ content: { parts: [{ text: "here is the work" }] } }] }),
+      geminiLine({ candidates: [{ content: { parts: [] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 1234, candidatesTokenCount: 56, totalTokenCount: 1290, thoughtsTokenCount: 12 } }),
+    ]);
+
+    const line = output.split("\n").find((l) => l.startsWith("data:") && l.includes('"response.completed"'));
+    expect(line).toBeTruthy();
+    const data = JSON.parse(line.slice(5).trim());
+    expect(data.response.usage).toMatchObject({
+      input_tokens: 1234,
+      output_tokens: 68, // candidatesTokenCount(56) + thoughtsTokenCount(12), folded by gemini usage extraction
+      total_tokens: 1290
+    });
+    expect(data.response.usage.output_tokens_details.reasoning_tokens).toBe(12);
+  });
 });
