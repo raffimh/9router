@@ -25,6 +25,11 @@ export default {
       "https://cloudcode-pa.googleapis.com",
     ],
     format: "antigravity",
+    // Healthy TTFT is seconds even at 250k+ context (cached); a connection that
+    // delivers zero bytes for 2 minutes is a hung daily-proxy stream, not slow
+    // prefill. Abort early so the client can retry instead of burning the full
+    // stall timeout (mid-stream silence still uses the long default).
+    stallFirstByteMs: 120 * 1000,
     headers: {
       "User-Agent": ANTIGRAVITY_IDE_USER_AGENT,
     },

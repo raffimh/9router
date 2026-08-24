@@ -188,7 +188,7 @@ export function createDisconnectAwareStream(transformStream, streamController, o
  * @param {TransformStream} transformStream - Transform stream for SSE
  * @param {object} streamController - Stream controller from createStreamController
  */
-export function pipeWithDisconnect(providerResponse, transformStream, streamController, onAbortTerminal = null, stallTimeoutMs = STREAM_STALL_TIMEOUT_MS) {
+export function pipeWithDisconnect(providerResponse, transformStream, streamController, onAbortTerminal = null, stallTimeoutMs = STREAM_STALL_TIMEOUT_MS, firstByteTimeoutMs = null) {
   let stallTimer = null;
   let chunkCount = 0;
   let totalBytes = 0;
@@ -200,12 +200,15 @@ export function pipeWithDisconnect(providerResponse, transformStream, streamCont
   };
   const armStall = () => {
     clearStall();
+    // Before the first upstream byte a shorter watchdog applies (provider-configured):
+    // a connection that never delivered anything is hung, not slowly reasoning.
+    const timeoutMs = (firstByteTimeoutMs && chunkCount === 0) ? firstByteTimeoutMs : stallTimeoutMs;
     stallTimer = setTimeout(() => {
       stallTimer = null;
-      dbg(tag, `STALL TIMEOUT ${stallTimeoutMs}ms | chunks=${chunkCount} | bytes=${totalBytes} | sinceLast=${Date.now() - lastChunkAt}ms`);
+      dbg(tag, `STALL TIMEOUT ${timeoutMs}ms | chunks=${chunkCount} | bytes=${totalBytes} | sinceLast=${Date.now() - lastChunkAt}ms`);
       streamController.handleError?.(new Error("stream stall timeout"));
       streamController.abort?.();
-    }, stallTimeoutMs);
+    }, timeoutMs);
   };
 
   // Wrap controller so every termination path clears the stall timer.

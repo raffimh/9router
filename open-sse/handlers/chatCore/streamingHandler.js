@@ -81,11 +81,15 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
 
   const transformStream = buildTransformStream({ provider, sourceFormat, targetFormat, userAgent, reqLogger, toolNameMap, customToolNames, model, connectionId, body, onStreamComplete, apiKey });
 
-  // Responses passthrough: synthesize response.failed + [DONE] if the stream aborts/stalls before a terminal event
-  const isResponsesPassthrough = sourceFormat === FORMATS.OPENAI_RESPONSES && targetFormat === FORMATS.OPENAI_RESPONSES;
-  const onAbortTerminal = isResponsesPassthrough ? buildAbortedResponsesTerminalBytes : null;
+  // Responses clients: synthesize response.failed + [DONE] if the stream aborts/stalls
+  // before a terminal event — passthrough AND translated (e.g. codex -> antigravity),
+  // so clients like Codex retry instead of seeing a bare connection close.
+  const isResponsesClient = sourceFormat === FORMATS.OPENAI_RESPONSES;
+  const onAbortTerminal = isResponsesClient ? buildAbortedResponsesTerminalBytes : null;
   const stallTimeoutMs = PROVIDERS[provider]?.stallTimeoutMs || STREAM_STALL_TIMEOUT_MS;
-  const transformedBody = pipeWithDisconnect(providerResponse, transformStream, streamController, onAbortTerminal, stallTimeoutMs);
+  // Shorter watchdog while zero upstream bytes have arrived (hung connection vs slow thinking)
+  const firstByteTimeoutMs = PROVIDERS[provider]?.stallFirstByteMs || null;
+  const transformedBody = pipeWithDisconnect(providerResponse, transformStream, streamController, onAbortTerminal, stallTimeoutMs, firstByteTimeoutMs);
 
   saveRequestDetail(buildRequestDetail({
     provider, model, connectionId,
