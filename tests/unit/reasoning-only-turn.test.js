@@ -66,6 +66,19 @@ describe("reasoning-only turn termination (gemini -> openai-responses)", () => {
     expect(output.trimEnd().endsWith("data: [DONE]")).toBe(true);
   });
 
+  it("replaces response.completed with response.failed when Antigravity wraps candidates in response envelope", async () => {
+    const { output } = await runStream([
+      geminiLine({ response: { candidates: [{ content: { parts: [{ text: "thinking via antigravity", thought: true }] } }] } }),
+      geminiLine({ response: { candidates: [{ content: { parts: [{ text: "more antigravity thought", thought: true }] } }] } }),
+      geminiLine({ response: { candidates: [{ content: { parts: [] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 60, thoughtsTokenCount: 60 } } }),
+    ]);
+
+    expect(output).toContain("response.failed");
+    expect(output).toContain("stream_disconnected");
+    expect(output).not.toContain("event: response.completed");
+    expect(output.trimEnd().endsWith("data: [DONE]")).toBe(true);
+  });
+
   it("keeps response.completed when the turn produced text", async () => {
     const { output } = await runStream([
       geminiLine({ candidates: [{ content: { parts: [{ text: "deep thought", thought: true }] } }] }),
