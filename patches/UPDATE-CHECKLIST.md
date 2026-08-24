@@ -18,6 +18,7 @@
 | 5 | **Capabilities: deepseek-vision + Xiaomi MiMo** (`providers/capabilities.js`) | `deepseek-v4-flash-vision-exp` tidak kena vision (ditelan pattern `*deepseek-v4*` text-only). MiMo: semua varian LLM punya reasoning tapi tidak diset; `mimo-v2.5-pro` keliru dikasih vision (aslinya **text-only** — yang multimodal adalah `mimo-v2.5` base); varian TTS tanya tools/audio-out | ❌ Masih bug |
 | 6 | **Usage hilang saat client abort** (`open-sse/utils/stream.js`) | `onStreamComplete`/`saveUsageStats` hanya dipanggil di `flush()` transform stream. Codex menutup koneksi SSE begitu menerima `response.completed` (`DISCONNECT: ResponseAborted`) → `reader.cancel()`+`writer.abort()` melewati `flush()` → usage Antigravity/Gemini **tidak pernah tersimpan ke DB**, sementara provider cepat (glm) selesai normal lewat `flush()` dan tercatat | ❌ Masih bug |
 | 7 | **Turn reasoning-only menghentikan task diam-diam** (`open-sse/utils/stream.js`) | Gemini flash kadang stream thought parts lalu finish (STOP, **bukan** MAX_TOKENS) tanpa text/tool call. `response.completed` dengan output kosong → Codex menganggap turn sukses → `task_complete` + `last_agent_message: null` → task berhenti diam-diam di tengah pekerjaan. Terverifikasi live (session Codex 22:55, 178k ctx, 3288 token murni thinking). **Effort level tidak mempengaruhi** — quirk stokastik model, medium tetap bisa kena | ❌ Masih bug |
+| 8 | **Hang stream antigravity tidak retryable + deteksi lambat** (`streamHandler.js` + `streamingHandler.js` + `registry/antigravity.js`) | (a) `response.failed` sintetis (onAbortTerminal) hanya dipasang untuk Responses **passthrough** — jalur translate (codex→antigravity) saat stall/abort ditutup polos tanpa terminal event → Codex tidak retry; (b) watchdog stall tunggal 6 menit tidak membedakan koneksi hang (0 byte; TTFT sehat antigravity ~4 detik) vs silence thinking sah di tengah stream. Terverifikasi live: 0 byte selama 6 menit (IN 276k) → task mati | ❌ Masih bug |
 
 Semua fix hidup di **satu branch integrasi: `patched`** di fork [`raffimh/9router`](https://github.com/raffimh/9router).
 
@@ -32,6 +33,9 @@ master (= upstream v0.5.55, sync otomatis)
       ├── fix(stream): finalize usage accounting in cancel() when client aborts SSE stream
       └── fix(stream): replace terminal event on gemini-family reasoning-only turns
 ```
+
+> Catatan: ada juga commit "fix(stream): retryable stall failure + first-byte watchdog"
+> (patch #8) di branch yang sama.
 
 > 📌 Fix lama tidak akan hilang: semuanya commit permanen di `patched`.
 > Fix baru di masa depan = tambah commit baru di branch yang sama.
@@ -242,6 +246,23 @@ Di build npm: chunk yang sama dengan patch #6 (**`8895.js`**, cari `Error in flu
 > 4. Verifikasi: `node --check` lulus; string `reasoning-only turn` muncul di chunk; **dan** pastikan tidak ada referensi `c`/`p` telanjang di dalam blok guard.
 > 5. Regression test: `tests/unit/reasoning-only-turn.test.js` (4 test).
 
+### 2h. Stall retryable + first-byte watchdog → patch build minified
+
+Fix mengubah 3 file: `open-sse/utils/streamHandler.js` (param `firstByteTimeoutMs`
+di `pipeWithDisconnect`; armStall memakai timeout pendek selama `chunkCount===0`),
+`open-sse/handlers/chatCore/streamingHandler.js` (`onAbortTerminal` untuk SEMUA
+klien Responses, bukan hanya passthrough; pass `PROVIDERS[provider]?.stallFirstByteMs`),
+`open-sse/providers/registry/antigravity.js` (transport `stallFirstByteMs: 120000`).
+
+Di build npm:
+- **8895.js L4** (streamingHandler): kondisi `M=p===OPENAI_RESPONSES&&q===OPENAI_RESPONSES?j.Hr:null` → `M=p===OPENAI_RESPONSES?j.Hr:null`; tambah `_fb=PROVIDERS[b]?.stallFirstByteMs||null` dan pass sebagai arg ke-6 pipeWithDisconnect.
+- **8895.js L13** (pipeWithDisconnect): signature + `let _t=h`, armStall pakai `0===j&&_fb?_fb:h`.
+- **1901.js / 4953.js / 5285.js** (registry antigravity): sisip `stallFirstByteMs:12e4,` setelah `format:"antigravity",` (muncul di 3 chunk — patch semuanya).
+
+> ⚠️ TDZ/shadowing: pakai nama fresh (`_fb`,`_t`) — jangan referensikan `c`/`p` mentah di dalam fungsi minified.
+> Verifikasi: `node --check` semua chunk; string `stallFirstByteMs` muncul di 8895 + 3 chunk registry.
+> Regression test: `tests/unit/stall-first-byte.test.js` (2 test).
+
 ---
 
 ## Langkah 3 — Restart 9router
@@ -265,6 +286,7 @@ npx 9router start
 | Capabilities vision/MiMo | `curl $NINEROUTER_URL/v1/models` → cek caps `sumopod/mimo-v2.5-pro` dan model `*deepseek*vision*` | mimo-v2.5-pro: `reasoning:true, vision:false`; deepseek-vision: `vision:true, reasoning:true` |
 | Cancel-usage | Jalankan sesi Codex via `antigravity/*` (pastikan log `DISCONNECT: ResponseAborted` muncul), lalu cek Usage/History di dashboard | Baris usage model antigravity **muncul** dengan token IN/OUT meski stream di-abort client |
 | Reasoning-only turn | Sesi Codex panjang via `antigravity/gemini-*`; kalau model kena quirk reasoning-only, log 9router menampilkan `reasoning-only turn ... replacing response.completed with response.failed` | Codex me-retry otomatis ("stream error; retrying") dan task **berlanjut**, tidak berhenti diam-diam |
+| Stall retryable + first-byte | Stream antigravity hang (0 byte) → log `STALL TIMEOUT 120000ms | chunks=0`; stream stall di tengah tetap 360000ms | Hang terdeteksi 2 menit (bukan 6) dan Codex menerima `response.failed` → auto-retry |
 
 ```powershell
 # Cek cepat di build
