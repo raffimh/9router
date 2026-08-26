@@ -372,30 +372,35 @@ export function createSSEStream(options = {}) {
 
             // Gemini-family reasoning-only turn: the model streamed thought parts
             // then finished (STOP, not MAX_TOKENS) without any text or tool call.
-            // Clients like Codex treat response.completed with no output as a
-            // successful-but-empty turn and end the task silently
-            // (task_complete, last_agent_message: null). Replace the terminal
-            // event with a retryable response.failed so the client re-rolls the
-            // request instead of stopping mid-task.
+            // Clients like Codex or OpenCode treat a finish without output as a
+            // successful-but-empty turn and end the task silently.
+            // Replace the terminal event with a retryable failure so the client re-rolls
+            // the request instead of stopping mid-task.
             if (
-              sourceFormat === FORMATS.OPENAI_RESPONSES &&
+              (sourceFormat === FORMATS.OPENAI_RESPONSES || sourceFormat === FORMATS.OPENAI) &&
               GEMINI_FAMILY_FORMATS.has(targetFormat) &&
               !streamDoneSent &&
-              item?.event === "response.completed" &&
+              (sourceFormat === FORMATS.OPENAI_RESPONSES ? item?.event === "response.completed" : !!item?.choices?.[0]?.finish_reason) &&
               accumulatedContent.length === 0 &&
               !(state?.geminiToolCallCount > 0) &&
               accumulatedThinking.length > 0
             ) {
-              dbg("SSE", `reasoning-only turn | provider=${provider} | model=${model} | thinking=${accumulatedThinking.length} chars | replacing response.completed with response.failed`);
-              const failedOutput = formatIncompleteOpenAIResponsesStreamFailure();
-              reqLogger?.appendConvertedChunk?.(failedOutput);
-              controller.enqueue(sharedEncoder.encode(failedOutput));
+              dbg("SSE", `reasoning-only turn | provider=${provider} | model=${model} | format=${sourceFormat} | thinking=${accumulatedThinking.length} chars | replacing completion with retryable error`);
+              if (sourceFormat === FORMATS.OPENAI_RESPONSES) {
+                const failedOutput = formatIncompleteOpenAIResponsesStreamFailure();
+                reqLogger?.appendConvertedChunk?.(failedOutput);
+                controller.enqueue(sharedEncoder.encode(failedOutput));
+              } else {
+                const errorChunk = `data: {"error":{"message":"Reasoning-only turn completed without content; stream aborted for client retry","type":"stream_disconnected","code":"stream_disconnected"}}\n\n`;
+                reqLogger?.appendConvertedChunk?.(errorChunk);
+                controller.enqueue(sharedEncoder.encode(errorChunk));
+              }
               const doneOutput = "data: [DONE]\n\n";
               reqLogger?.appendConvertedChunk?.(doneOutput);
               controller.enqueue(sharedEncoder.encode(doneOutput));
               openAIResponsesTerminalSeen = true;
               streamDoneSent = true;
-              sseEmittedCount += 2;
+              sseEmittedCount++;
               continue;
             }
 

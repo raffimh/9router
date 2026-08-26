@@ -22,13 +22,13 @@ function geminiLine(obj) {
   return `data: ${JSON.stringify(obj)}\n\n`;
 }
 
-async function runStream(lines) {
+async function runStream(lines, sourceFormat = FORMATS.OPENAI_RESPONSES) {
   const chunks = [];
   const onStreamComplete = vi.fn();
   const stream = createSSEStream({
     mode: "translate",
     targetFormat: FORMATS.ANTIGRAVITY,
-    sourceFormat: FORMATS.OPENAI_RESPONSES,
+    sourceFormat,
     provider: "antigravity",
     model: "gemini-3.7-flash-high",
     connectionId: "conn-ronly",
@@ -125,5 +125,17 @@ describe("reasoning-only turn termination (gemini -> openai-responses)", () => {
       total_tokens: 1290
     });
     expect(data.response.usage.output_tokens_details.reasoning_tokens).toBe(12);
+  });
+
+  it("replaces finish_reason: stop with error chunk in OpenAI format (OpenCode) on reasoning-only turns", async () => {
+    const { output } = await runStream([
+      geminiLine({ response: { candidates: [{ content: { parts: [{ text: "just thinking in opencode", thought: true }] } }] } }),
+      geminiLine({ response: { candidates: [{ content: { parts: [] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 30 } } }),
+    ], FORMATS.OPENAI);
+
+    expect(output).toContain('"error"');
+    expect(output).toContain("stream_disconnected");
+    expect(output).not.toContain('"finish_reason":"stop"');
+    expect(output.trimEnd().endsWith("data: [DONE]")).toBe(true);
   });
 });
