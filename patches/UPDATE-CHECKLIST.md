@@ -231,24 +231,31 @@ hook `cancel()` baru pada TransformStream. Di build npm, kodenya ada di **chunk
 
 ### 2g. Turn reasoning-only → patch build minified
 
-Fix mengubah `open-sse/utils/stream.js`: saat item `response.completed` hendak
-di-emit pada stream gemini-family → openai-responses dan turn terbukti
-reasoning-only (accumulatedContent kosong, tidak ada tool call, thinking
-non-kosong), ganti terminal event dengan `response.failed` retryable
-(`formatIncompleteOpenAIResponsesStreamFailure`) + `[DONE]` supaya client
-(Codex) me-RETRY request, bukan menganggap turn sukses-kosong dan berhenti.
+Fix mengubah `open-sse/utils/stream.js`: saat item terminal hendak
+di-emit pada stream gemini-family dan turn terbukti reasoning-only
+(accumulatedContent kosong, tidak ada tool call, thinking non-kosong):
+- Pada **Codex** (`sourceFormat === OPENAI_RESPONSES`): ganti `response.completed` dengan `response.failed` retryable (`formatIncompleteOpenAIResponsesStreamFailure`) + `[DONE]`.
+- Pada **OpenCode / SDK standar** (`sourceFormat === OPENAI`): ganti chunk `finish_reason: "stop"` kosong dengan error chunk SSE (`{"error":{"message":"...","type":"stream_disconnected"}}`) + `[DONE]`, sehingga library client (Vercel AI SDK) memicu retry otomatis dan tidak menghentikan turn diam-diam.
+
 Di build npm: chunk yang sama dengan patch #6 (**`8895.js`**, cari `Error in flush`).
+
+**PENTING (Antigravity Envelope):** Antigravity membungkus setiap chunk dalam
+`{ response: { candidates: [...] } }`. Di jalur akumulasi thinking/content stream.js,
+wajib unwrap `(p.response?.candidates || p.candidates)` agar `accumulatedThinking`
+benar-benar bertambah pada stream Antigravity. Tanpa unwrap ini, thinking terbaca 0
+dan guard reasoning-only tidak akan pernah terpicu!
 
 > Re-apply patch reasoning-only-turn ke build 9router:
 > 1. Cari chunk yang mengandung `Error in flush` (sama dengan patch #6). Backup (`.bak-ronly` sudah ada untuk 8895.js v0.5.55).
-> 2. Referensi source: https://github.com/raffimh/9router branch `patched`, commit "fix(stream): replace terminal event on gemini-family reasoning-only turns" dan "fix(stream): unwrap antigravity envelope when tracking gemini thinking/content".
+> 2. Referensi source: https://github.com/raffimh/9router branch `patched`, commit "fix(stream): extend reasoning-only turn protection to OpenAI-format clients (OpenCode)".
 > 3. Inti:
->    (a) Di jalur akumulasi `p.candidates?.[0]?.content?.parts`, ubah menjadi `(p.response?.candidates||p.candidates)?.[0]?.content?.parts`. Tanpa unwrap ini, Antigravity menghasilkan thinking 0 dan guard reasoning-only tidak aktif!
+>    (a) Di jalur akumulasi `p.candidates?.[0]?.content?.parts`, ubah menjadi `(p.response?.candidates||p.candidates)?.[0]?.content?.parts`.
 >    (b) **hoist** ke scope fungsi (sebelum `return new TransformStream`): `const _gf = targetFormat∈{GEMINI,GEMINI_CLI,VERTEX,ANTIGRAVITY}`, `const _pv = provider`;
->    (c) di loop items translate-mode (setelah filter `hasValuableContent`, sebelum injeksi usage), guard: `sourceFormat===OPENAI_RESPONSES && _gf && !streamDoneSent && item?.event==="response.completed" && accumulatedContent.length===0 && !(state?.geminiToolCallCount>0) && accumulatedThinking.length>0` → enqueue `formatIncompleteOpenAIResponsesStreamFailure()` + `data: [DONE]\n\n`, set `openAIResponsesTerminalSeen=streamDoneSent=true`, `continue`.
+>    (c) di loop items translate-mode (setelah filter `hasValuableContent`, sebelum injeksi usage), guard: `(sourceFormat===OPENAI_RESPONSES || sourceFormat===OPENAI) && _gf && !streamDoneSent && (sourceFormat===OPENAI_RESPONSES ? item?.event==="response.completed" : !!item?.choices?.[0]?.finish_reason) && accumulatedContent.length===0 && !(state?.geminiToolCallCount>0) && accumulatedThinking.length>0` → enqueue synthetic failure (Responses) atau error chunk (OpenAI) + `data: [DONE]\n\n`, set `openAIResponsesTerminalSeen=streamDoneSent=true`, `continue`.
 >    ⚠️ **PENTING (pelajaran v1 → ReferenceError TDZ live):** di dalam loop items minified, nama scope-luar TER-SHADOW oleh deklarasi lokal di akhir body (`let c=formatSSE(...)`, `let p=parsedLine`, dst). JANGAN mereferensikan `c`/`p` mentah di dalam loop — selalu hoist ke const baru di scope fungsi dulu. String `reasoning-only turn` harus direferensikan via nama hoisted.
 > 4. Verifikasi: `node --check` lulus; string `reasoning-only turn` muncul di chunk; **dan** pastikan tidak ada referensi `c`/`p` telanjang di dalam blok guard.
-> 5. Regression test: `tests/unit/reasoning-only-turn.test.js` (6 test termasuk Antigravity envelope).
+> 5. Regression test: `tests/unit/reasoning-only-turn.test.js` (7 test termasuk OpenAI format & Antigravity envelope).
+
 
 ### 2h. Stall retryable + first-byte watchdog → patch build minified
 
