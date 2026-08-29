@@ -133,19 +133,19 @@
   --color-brand-500: #bd93f9;
   --color-brand-600: #a87ffb;
   --color-brand-700: #905df7;
-  --color-brand-800: #6f38d1;
+  --color-brand-800: #7131d9;
   --color-brand-900: #4c2494;
 
   --color-primary: #bd93f9;
   --color-primary-hover: #ff79c6;
 
-  /* Surfaces (Official Dracula colors) */
-  --color-bg: #282a36;
+  /* Surfaces: rich layered Dracula contrast for cards & dashboard widgets */
+  --color-bg: #1e1f29;
   --color-bg-alt: #21222c;
   --color-surface: #282a36;
-  --color-surface-2: #383a59;
+  --color-surface-2: #343746;
   --color-surface-3: #44475a;
-  --color-sidebar: rgba(33, 34, 44, 0.92);
+  --color-sidebar: rgba(30, 31, 41, 0.95);
 
   --color-border: #44475a;
   --color-border-subtle: #343746;
@@ -160,14 +160,14 @@
   --color-warning: #f1fa8c;
   --color-info: #8be9fd;
 
-  --shadow-soft: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-  --shadow-warm: 0 2px 12px -2px rgba(189, 147, 249, 0.25);
-  --shadow-elevated: 0 12px 28px -4px rgba(0, 0, 0, 0.55);
+  --shadow-soft: 0 2px 4px 0 rgba(0, 0, 0, 0.4);
+  --shadow-warm: 0 4px 16px -2px rgba(189, 147, 249, 0.3);
+  --shadow-elevated: 0 14px 32px -4px rgba(0, 0, 0, 0.6);
   --shadow-elev:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
-    0 1px 2px rgba(0, 0, 0, 0.5),
-    0 16px 48px -8px rgba(0, 0, 0, 0.65);
-  --shadow-focus: 0 0 0 3px rgba(189, 147, 249, 0.25);
+    0 2px 4px rgba(0, 0, 0, 0.5),
+    0 18px 48px -8px rgba(0, 0, 0, 0.7);
+  --shadow-focus: 0 0 0 3px rgba(189, 147, 249, 0.3);
 
   color-scheme: dark;
 }
