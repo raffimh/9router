@@ -48,7 +48,7 @@ export function useTheme() {
   }, [theme, initTheme]);
 
   // Compute isDark from current state (no effect needed)
-  const isDark = theme === "dark" || (theme === "system" && systemPrefersDark);
+  const isDark = theme === "dark" || theme === "dracula" || (theme === "system" && systemPrefersDark);
 
   return {
     theme,

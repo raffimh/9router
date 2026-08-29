@@ -16,7 +16,10 @@ const useThemeStore = create(
 
       toggleTheme: () => {
         const currentTheme = get().theme;
-        const newTheme = currentTheme === "dark" ? "light" : "dark";
+        // Cycle light -> dark -> dracula -> light
+        const order = ["light", "dark", "dracula"];
+        const nextIdx = (order.indexOf(currentTheme) + 1) % order.length;
+        const newTheme = order[nextIdx >= 0 ? nextIdx : 0];
         set({ theme: newTheme });
         applyTheme(newTheme);
       },
@@ -43,10 +46,14 @@ function applyTheme(theme) {
 
   const effectiveTheme = theme === "system" ? systemTheme : theme;
 
+  root.classList.remove("dark", "dracula");
+  root.removeAttribute("data-theme");
+
   if (effectiveTheme === "dark") {
     root.classList.add("dark");
-  } else {
-    root.classList.remove("dark");
+  } else if (effectiveTheme === "dracula") {
+    root.classList.add("dark", "dracula");
+    root.setAttribute("data-theme", "dracula");
   }
 }
 

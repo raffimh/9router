@@ -119,6 +119,60 @@
 }
 
 /* ============================================================
+   Dracula theme palette — https://draculatheme.com
+   ============================================================ */
+.dark.dracula,
+[data-theme="dracula"],
+.dracula {
+  /* Dracula brand scale - centered on Purple (#bd93f9) / Pink (#ff79c6) */
+  --color-brand-50: #fdf2f8;
+  --color-brand-100: #fce7f3;
+  --color-brand-200: #fbcfe8;
+  --color-brand-300: #f472b6;
+  --color-brand-400: #ff79c6;
+  --color-brand-500: #bd93f9;
+  --color-brand-600: #a87ffb;
+  --color-brand-700: #905df7;
+  --color-brand-800: #6f38d1;
+  --color-brand-900: #4c2494;
+
+  --color-primary: #bd93f9;
+  --color-primary-hover: #ff79c6;
+
+  /* Surfaces (Official Dracula colors) */
+  --color-bg: #282a36;
+  --color-bg-alt: #21222c;
+  --color-surface: #282a36;
+  --color-surface-2: #383a59;
+  --color-surface-3: #44475a;
+  --color-sidebar: rgba(33, 34, 44, 0.92);
+
+  --color-border: #44475a;
+  --color-border-subtle: #343746;
+
+  --color-text: #f8f8f2;
+  --color-text-main: #f8f8f2;
+  --color-text-muted: #a5b1db;
+  --color-text-subtle: #6272a4;
+
+  --color-danger: #ff5555;
+  --color-success: #50fa7b;
+  --color-warning: #f1fa8c;
+  --color-info: #8be9fd;
+
+  --shadow-soft: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-warm: 0 2px 12px -2px rgba(189, 147, 249, 0.25);
+  --shadow-elevated: 0 12px 28px -4px rgba(0, 0, 0, 0.55);
+  --shadow-elev:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 16px 48px -8px rgba(0, 0, 0, 0.65);
+  --shadow-focus: 0 0 0 3px rgba(189, 147, 249, 0.25);
+
+  color-scheme: dark;
+}
+
+/* ============================================================
    Fix native select dropdowns in dark mode
    ============================================================ */
 select {

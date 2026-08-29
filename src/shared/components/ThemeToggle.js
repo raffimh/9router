@@ -4,7 +4,7 @@ import { useTheme } from "@/shared/hooks/useTheme";
 import { cn } from "@/shared/utils/cn";
 
 export default function ThemeToggle({ className, variant = "default" }) {
-  const { isDark, toggleTheme } = useTheme();
+  const { theme, isDark, toggleTheme } = useTheme();
 
   const variants = {
     default: cn(
@@ -22,12 +22,25 @@ export default function ThemeToggle({ className, variant = "default" }) {
     ),
   };
 
+  const getIcon = () => {
+    if (theme === "dracula") return "palette";
+    if (isDark) return "light_mode";
+    return "dark_mode";
+  };
+
+  const getLabel = () => {
+    if (theme === "light") return "Switch to dark mode";
+    if (theme === "dark") return "Switch to Dracula mode";
+    if (theme === "dracula") return "Switch to light mode";
+    return `Switch to ${isDark ? "light" : "dark"} mode`;
+  };
+
   return (
     <button
       onClick={toggleTheme}
       className={cn(variants[variant], className)}
-      aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
-      title={`Switch to ${isDark ? "light" : "dark"} mode`}
+      aria-label={getLabel()}
+      title={getLabel()}
     >
       <span
         className={cn(
@@ -35,7 +48,7 @@ export default function ThemeToggle({ className, variant = "default" }) {
           variant === "card" && "transition-transform duration-300 group-hover:rotate-12"
         )}
       >
-        {isDark ? "light_mode" : "dark_mode"}
+        {getIcon()}
       </span>
     </button>
   );
