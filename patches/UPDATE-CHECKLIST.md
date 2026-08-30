@@ -254,7 +254,7 @@ dan guard reasoning-only tidak akan pernah terpicu!
 >    (b) **hoist** ke scope fungsi (sebelum `return new TransformStream`): `const _gf = targetFormat∈{GEMINI,GEMINI_CLI,VERTEX,ANTIGRAVITY}`, `const _pv = provider`;
 >    (c) di loop items translate-mode (setelah filter `hasValuableContent`, sebelum injeksi usage), guard: `(sourceFormat===OPENAI_RESPONSES || sourceFormat===OPENAI) && _gf && !streamDoneSent && (sourceFormat===OPENAI_RESPONSES ? item?.event==="response.completed" : !!item?.choices?.[0]?.finish_reason) && accumulatedContent.length===0 && !(state?.geminiToolCallCount>0) && accumulatedThinking.length>0` → enqueue synthetic failure (Responses) atau error chunk (OpenAI) + `data: [DONE]\n\n`, set `openAIResponsesTerminalSeen=streamDoneSent=true`, `continue`.
 >    ⚠️ **PENTING (pelajaran v1 → ReferenceError TDZ live):** di dalam loop items minified, nama scope-luar TER-SHADOW oleh deklarasi lokal di akhir body (`let c=formatSSE(...)`, `let p=parsedLine`, dst). JANGAN mereferensikan `c`/`p` mentah di dalam loop — selalu hoist ke const baru di scope fungsi dulu. String `reasoning-only turn` harus direferensikan via nama hoisted.
-> 4. Verifikasi: `node --check` lulus; string `reasoning-only turn` muncul di chunk; **dan** pastikan tidak ada referensi `c`/`p` telanjang di dalam blok guard.
+> 4. Verifikasi: `node --check` lulus; string `reasoning-only turn` muncul di chunk; **dan** pastikan tidak ada referensi `c`/`p` telanjang di dalam blok guard. ⚠️ **`node --check` TIDAK menangkap TDZ** (itu error runtime, bukan sintaks — terbukti live di v0.5.59: check lulus tapi `Cannot access 'c' before initialization` menghancurkan semua request streaming). Setelah patch chunk server, **WAJIB** restart 9router + 1 request streaming sebagai smoke test sebelum dipakai. Lihat post-mortem di bawah.
 > 5. Regression test: `tests/unit/reasoning-only-turn.test.js` (7 test termasuk OpenAI format & Antigravity envelope).
 
 
@@ -290,6 +290,42 @@ sendCompleted minified).
 > 3. Inti: di sendCompleted, sebelum emit, baca `state.usage`; bila ada, konversi ke `{input_tokens, input_tokens_details:{cached_tokens}, output_tokens, output_tokens_details:{reasoning_tokens}, total_tokens}` dan spread ke object `response` (`..._ru?{usage:_ru}:{}`).
 > 4. Verifikasi: `node --check`; test end-to-end — event `token_count` Codex kini berisi info (bukan null), dan di context besar Codex otomatis memicu "compacting".
 > 5. Regression test: `tests/unit/reasoning-only-turn.test.js` (test "embeds token usage").
+
+### 2j. Tema Dracula → patch CSS bundles + chunk client (build npm)
+
+Dua target di `.next-cli-build`:
+
+**(1) CSS** — `app/.next-cli-build/static/css/*.css` (v0.5.59: 3 file; variabel tema
+asli hidup di file yang mengandung `.dark{` — di v0.5.59: `c74d311ac45a6a53.css`;
+file lain hanya berisi font). Append blok Dracula ke SEMUA file css.
+
+> ⚠️ **WAJIB pakai nama variabel asli app** — skema Tailwind v4 `--color-*`
+> (`--color-bg`, `--color-surface-2`, `--color-text-main`, ...), BUKAN nama generik
+> (`--background`, `--surface`, ...). Blok dengan nama salah tidak error dan tidak
+> berpengaruh apa pun (terbukti live v0.5.59). Selalu turunkan nama dari blok
+> `.dark{}`/`:root{}` di CSS build, lalu verifikasi cakupan: semua var `:root`
+> (kecuali `--font-*`/`--radius*`) harus ada di blok Dracula.
+
+Blok yang benar (selector `.dark.dracula` = specificity 0,2,0 > `.dark` 0,1,0):
+
+```css
+.dark.dracula,[data-theme="dracula"]{--color-brand-50:#f7f3fe;--color-brand-100:#eee5fd;--color-brand-200:#d3bff6;--color-brand-300:#c8a8fa;--color-brand-400:#bd93f9;--color-brand-500:#bd93f9;--color-brand-600:#9b6fe8;--color-brand-700:#7b4fd6;--color-brand-800:#5c39ab;--color-brand-900:#3d2672;--color-primary:#bd93f9;--color-primary-hover:#a678ec;--color-bg:#1e1f29;--color-bg-alt:#22232f;--color-surface:#282a36;--color-surface-2:#343746;--color-surface-3:#44475a;--color-sidebar:#242634d9;--color-border:#44475a;--color-border-subtle:#3b3e4e;--color-text:#f8f8f2;--color-text-main:#f8f8f2;--color-text-muted:#b8bfe5;--color-text-subtle:#8b93b8;--color-danger:#ff5555;--color-success:#50fa7b;--color-warning:#f1fa8c;--color-info:#8be9fd;--shadow-soft:0 1px 2px 0 #0000004d;--shadow-warm:0 2px 12px -2px #bd93f940;--shadow-elevated:0 12px 28px -4px #00000073;--shadow-elev:inset 0 1px 0 0 #ffffff0f,0 1px 2px #0006,0 16px 48px -8px #0000008c;--shadow-focus:0 0 0 3px #bd93f92e;color-scheme:dark}
+.dark.dracula .bg-white\/5,.dark.dracula [class*="bg-white/5"],[data-theme="dracula"] .bg-white\/5,[data-theme="dracula"] [class*="bg-white/5"]{background-color:#282a36!important}
+.dark.dracula .border-white\/10,.dark.dracula [class*="border-white/10"],[data-theme="dracula"] .border-white\/10,[data-theme="dracula"] [class*="border-white/10"]{border-color:#44475a!important}
+.dark.dracula .bg-white\/10,.dark.dracula [class*="bg-white/10"],[data-theme="dracula"] .bg-white\/10,[data-theme="dracula"] [class*="bg-white/10"]{background-color:#343746!important}
+```
+
+**(2) Chunk client theme store** — `app/.next-cli-build/static/chunks/` (cari chunk
+yang mengandung `toggleTheme`; v0.5.59: `1321-2a57edbbd554a357.js` = store [1
+kemunculan], `5497-*.js` = hook/konsumen [4 kemunculan] — yang di-patch CUKUP store).
+Dua penggantian:
+
+- Fungsi `s(e)` (apply theme): tambahkan cabang dracula — `classList.add("dark","dracula")` + `setAttribute("data-theme","dracula")`; cabang dark/light membersihkan keduanya.
+- `toggleTheme` store: rotasi 3-state `light → dark → dracula → light` (bukan 2-state).
+
+Verifikasi: string `--color-bg:#1e1f29` dan `data-theme` ada; **hard refresh browser
+(Ctrl+Shift+R)** — nama file chunk/css TIDAK berubah padahal isinya berubah, jadi
+browser bisa menyajikan cache lama tanpa hard refresh.
 
 ---
 
@@ -460,3 +496,70 @@ Regresi dijaga oleh `tests/unit/reasoning-only-turn.test.js` (4 test).
 2. **Set reminder** tiap kali Anda update 9router.
 3. **Tambahkan ke instruksi agent harness** Anda, misal di opencode:
    "Setiap update 9router, jalankan checklist di `9router/patches/UPDATE-CHECKLIST.md`".
+
+---
+
+## ⚠️ Post-mortem patch v0.5.59 (2026-08-30) — pelajaran WAJIB
+
+Dua bug live saat re-apply patch ke build v0.5.59. Jangan diulang.
+
+### P1 — TDZ ReferenceError: `node --check` LULUS ≠ aman runtime
+
+Guard reasoning-only di 8895.js memasang referensi `c` (targetFormat) DI DALAM
+`for(let a of w){...}` — padahal di blok yang sama ada `let c=(0,h.v8)(a,o)` di
+bawahnya. Hoisting `let` membuat `c` ber-TDZ → `Cannot access 'c' before
+initialization` di request streaming PERTAMA (semua request antigravity gagal,
+`failed to pipe response`). `node --check` tidak menangkap ini karena TDZ adalah
+error **runtime**, bukan sintaks.
+
+**Aturan:** setelah mem-patch chunk server, verifikasi berlapis:
+1. `node --check <chunk>` (sintaks),
+2. simulasi logika standalone (node -e) untuk kondisi guard,
+3. **restart 9router + 1 request streaming end-to-end** — baru dipakai.
+
+**Pola fix yang benar (v0.5.59):** pre-compute SEBELUM loop, di scope luar:
+```js
+let w=(0,d.Y8)(c,o,p,B),_gf=c===e.h.GEMINI||c===e.h.GEMINI_CLI||c===e.h.VERTEX||c===e.h.ANTIGRAVITY;
+if(w?.length>0)for(let a of w){ ... _gf ... }   // JANGAN c===e.h.GEMINI di sini
+```
+Log di dalam guard juga tidak boleh pakai `${p}`/`${t}` (sudah ter-shadow jadi
+parsed-chunk/event-name) — pakai nilai yang aman (`${o}`, `${E.length}`).
+
+### P2 — Ekspresi koma minified: `let A=...,B=...` adalah SATU statement
+
+- `let L=(function(){...})(),M=...,N=...` — menyisipkan `let _fb=...;` di tengah
+  rantai koma memutus sintaks. Perluas pakai koma: `...,_fb=h.xq[b]?.stallFirstByteMs||null,M=...`.
+- Rantai arrow `p=()=>{...},q={...}` dalam satu `let`: body arrow yang ditulis
+  ulang harus diakhiri TEPAT SATU `}` sebelum `,q=` — kelebihan `}` memindahkan
+  penutupan deklarasi dan memecah semua yang lain.
+- Rantai `if(A&&(...),B&&(...),C)for(...)` (urutan koma dalam satu if): mengganti
+  koma dengan `;` di tengah meninggalkan `if(` menggantung → tulis ulang seluruh
+  rantai sebagai statement `;` terpisah dan buang `if(`-nya.
+
+### P3 — Nama variabel CSS: ikut skema build, bukan skema sumber
+
+Tema Dracula v1 memakai nama generik (`--background`, `--surface`) padahal app
+build pakai skema Tailwind v4 `--color-*` (`--color-bg`, `--color-surface-2`,
+`--color-text-main`). Tidak ada error, tidak ada efek — bug diam. Selalu:
+
+1. Ekstrak blok `:root{}` dan `.dark{}` dari CSS build target.
+2. Petakan 1:1 ke palet baru dengan NAMA YANG SAMA.
+3. Verifikasi cakupan otomatis: enumerasi var `:root`, pastikan semua (kecuali
+   `--font-*`/`--radius*`) ada di blok baru.
+
+### P4 — Peta chunk v0.5.59 (referensi cepat update berikutnya)
+
+| Target patch | Chunk v0.5.59 | Anchor pencarian |
+|---|---|---|
+| Vision trimmer | `server/chunks/7807.js` | `l.slice(0,6)` → `o=l.slice(0,6)` minified |
+| Tool pairing (openai→antigravity) | `server/chunks/8499.js` | `functionResponse` + `.RV.MODEL` |
+| Usage di response.completed | `server/chunks/8499.js` | `completedSent` |
+| stream.js (translate/guard/candidates) | `server/chunks/8895.js` modul `71857` | `candidates`, `Error in flush` |
+| streamingHandler | `8895.js` L4 | `j.Hr:null,N=` |
+| pipeWithDisconnect | `8895.js` modul `59657` | `function g(a,b,c,f=null,h=d.xM)` |
+| Helper response.failed sintetis | `8895.js` modul `30320` | `u9` (string) / `Hr` (bytes) |
+| Registry antigravity stallFirstByteMs | `3753.js`, `7011.js`, `8236.js` | `format:"antigravity"` (var UA beda: `g` vs `d.Of`) |
+| CSS tema | `static/css/*.css` (3 file) | file yang mengandung `.dark{` |
+| Theme store | `static/chunks/1321-*.js` | `toggleTheme` (store=1, hook=4) |
+
+Nama chunk BERUBA tiap versi — selalu cari ulang via anchor, jangan hardcode.
