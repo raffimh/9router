@@ -416,7 +416,7 @@ export function createSSEStream(options = {}) {
               (sourceFormat === FORMATS.OPENAI_RESPONSES || sourceFormat === FORMATS.OPENAI) &&
               GEMINI_FAMILY_FORMATS.has(targetFormat) &&
               !streamDoneSent &&
-              (sourceFormat === FORMATS.OPENAI_RESPONSES ? item?.event === "response.completed" : !!item?.choices?.[0]?.finish_reason) &&
+              (sourceFormat === FORMATS.OPENAI_RESPONSES ? (item?.event === "response.completed" || item?.type === "response.completed" || item?.data?.type === "response.completed") : !!item?.choices?.[0]?.finish_reason) &&
               accumulatedContent.length === 0 &&
               !(state?.geminiToolCallCount > 0) &&
               accumulatedThinking.length > 0
