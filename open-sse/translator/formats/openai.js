@@ -20,8 +20,28 @@ export function filterToOpenAIFormat(body, opts = {}) {
     // Normalize developer role to system (many providers don't support developer)
     if (msg.role === ROLE.DEVELOPER) msg = { ...msg, role: ROLE.SYSTEM };
 
-    // Keep tool messages as-is (OpenAI format)
-    if (msg.role === ROLE.TOOL) return msg;
+    // Tool messages: pass through, but flatten multimodal array content — most
+    // OpenAI-compatible chat APIs require tool content to be a plain string, and
+    // an image_url block inside a tool message would either 400 or leak the
+    // base64 into text tokens. Text parts are joined; image parts become a note.
+    if (msg.role === ROLE.TOOL) {
+      if (Array.isArray(msg.content)) {
+        const parts = [];
+        for (const block of msg.content) {
+          if (block?.type === OPENAI_BLOCK.TEXT && typeof block.text === "string") {
+            parts.push(block.text);
+          } else if (block?.type === OPENAI_BLOCK.IMAGE_URL || block?.type === OPENAI_BLOCK.IMAGE) {
+            parts.push("[image from tool result omitted]");
+          } else if (typeof block === "string") {
+            parts.push(block);
+          } else {
+            parts.push(JSON.stringify(block));
+          }
+        }
+        return { ...msg, content: parts.join("\n") };
+      }
+      return msg;
+    }
 
     // Keep assistant messages with tool_calls as-is
     if (msg.role === ROLE.ASSISTANT && msg.tool_calls) return msg;

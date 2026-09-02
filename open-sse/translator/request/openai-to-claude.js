@@ -202,10 +202,39 @@ function getContentBlocksFromMessage(msg, toolNameMap = new Map()) {
   const blocks = [];
 
   if (msg.role === ROLE.TOOL) {
+    // Multimodal tool results (e.g. Codex view_image after the responses→openai
+    // pivot): convert OpenAI-shaped blocks into valid Claude tool_result content.
+    // Passing image_url blocks through verbatim makes Anthropic-compatible APIs
+    // reject the whole request with 400.
+    let content = msg.content;
+    if (Array.isArray(content)) {
+      content = content
+        .map(part => {
+          if (part?.type === OPENAI_BLOCK.TEXT && typeof part.text === "string") {
+            return { type: CLAUDE_BLOCK.TEXT, text: part.text };
+          }
+          if (part?.type === OPENAI_BLOCK.IMAGE_URL) {
+            const url = part.image_url?.url ?? part.image_url;
+            const parsed = typeof url === "string" ? parseDataUri(url) : null;
+            if (parsed) {
+              return { type: CLAUDE_BLOCK.IMAGE, source: { type: "base64", media_type: parsed.mimeType, data: parsed.base64 } };
+            }
+            if (typeof url === "string" && (url.startsWith("http://") || url.startsWith("https://"))) {
+              return { type: CLAUDE_BLOCK.IMAGE, source: { type: "url", url } };
+            }
+            return { type: CLAUDE_BLOCK.TEXT, text: "[unsupported image]" };
+          }
+          if (part?.type === CLAUDE_BLOCK.TEXT || part?.type === CLAUDE_BLOCK.IMAGE) {
+            return part;
+          }
+          return typeof part === "string" ? { type: CLAUDE_BLOCK.TEXT, text: part } : { type: CLAUDE_BLOCK.TEXT, text: JSON.stringify(part) };
+        })
+        .filter(Boolean);
+    }
     blocks.push({
       type: CLAUDE_BLOCK.TOOL_RESULT,
       tool_use_id: msg.tool_call_id,
-      content: msg.content
+      content
     });
   } else if (msg.role === ROLE.USER) {
     if (typeof msg.content === "string") {
