@@ -377,6 +377,11 @@ export function cleanJSONSchemaForAntigravity(schema) {
       return;
     }
 
+    // Normalize type to lowercase string
+    if (obj.type && typeof obj.type === "string") {
+      obj.type = obj.type.toLowerCase();
+    }
+
     // If property node has no type, infer it (Gemini rejects property definitions without a type)
     if (!obj.type) {
       if (obj.properties) {

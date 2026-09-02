@@ -529,107 +529,107 @@ const AG_DECOY_TOOLS = [
   {
     name: "browser_subagent",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "command_status",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "find_by_name",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "generate_image",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "grep_search",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "list_dir",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "list_resources",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "mcp_sequential-thinking_sequentialthinking",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "multi_replace_file_content",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "notify_user",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "read_resource",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "read_terminal",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "read_url_content",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "replace_file_content",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "run_command",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "search_web",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "send_command_input",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "task_boundary",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "view_content_chunk",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "view_file",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   },
   {
     name: "write_to_file",
     description: "This tool is currently unavailable.",
-    parameters: { type: "OBJECT", properties: {}, required: [] }
+    parameters: { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
   }
 ];
 
