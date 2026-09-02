@@ -355,9 +355,14 @@ export function cleanJSONSchemaForAntigravity(schema) {
 
   cleanupRequired(cleaned);
 
-  // Phase 5: Add placeholder for empty object schemas (Antigravity requirement)
-  function addPlaceholders(obj) {
+  // Phase 5: Add placeholder for empty object schemas and ensure valid protobuf types (Antigravity requirement)
+  function sanitizeSchemaNodes(obj) {
     if (!obj || typeof obj !== "object") return;
+
+    if (Array.isArray(obj)) {
+      for (const item of obj) sanitizeSchemaNodes(item);
+      return;
+    }
 
     // Empty schema {} (no type, no properties) after $ref removal — treat as object with placeholder
     if (Object.keys(obj).length === 0) {
@@ -372,6 +377,22 @@ export function cleanJSONSchemaForAntigravity(schema) {
       return;
     }
 
+    // If property node has no type, infer it (Gemini rejects property definitions without a type)
+    if (!obj.type) {
+      if (obj.properties) {
+        obj.type = "object";
+      } else if (obj.items) {
+        obj.type = "array";
+      } else {
+        obj.type = "string";
+      }
+    }
+
+    // If array has no items, add default string items
+    if (obj.type === "array" && (!obj.items || typeof obj.items !== "object")) {
+      obj.items = { type: "string" };
+    }
+
     if (obj.type === "object") {
       if (!obj.properties || Object.keys(obj.properties).length === 0) {
         obj.properties = {
@@ -384,15 +405,18 @@ export function cleanJSONSchemaForAntigravity(schema) {
       }
     }
 
-    // Recurse into nested objects
-    for (const value of Object.values(obj)) {
-      if (value && typeof value === "object") {
-        addPlaceholders(value);
+    // Recurse into properties and items
+    if (obj.properties && typeof obj.properties === "object") {
+      for (const value of Object.values(obj.properties)) {
+        sanitizeSchemaNodes(value);
       }
+    }
+    if (obj.items && typeof obj.items === "object") {
+      sanitizeSchemaNodes(obj.items);
     }
   }
 
-  addPlaceholders(cleaned);
+  sanitizeSchemaNodes(cleaned);
 
   return cleaned;
 }
