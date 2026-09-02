@@ -192,6 +192,37 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
 
             let resp = toolResponses[fid];
             if (resp === null || resp === undefined) resp = "";
+
+            // Multimodal tool result (e.g. Codex view_image): content is an array
+            // holding image_url blocks. Emit the images as inlineData parts next to
+            // the functionResponse instead of embedding base64 into the JSON —
+            // Gemini counts embedded base64 as text tokens (~250k per image).
+            const imageParts = [];
+            if (Array.isArray(resp)) {
+              const texts = [];
+              for (const part of resp) {
+                const url = part?.image_url?.url ?? part?.image_url ?? part?.url;
+                if (typeof url === "string" && url.startsWith("data:")) {
+                  const commaIndex = url.indexOf(",");
+                  if (commaIndex !== -1) {
+                    imageParts.push({
+                      inlineData: {
+                        mime_type: url.substring(5, commaIndex).split(";")[0],
+                        data: url.substring(commaIndex + 1)
+                      }
+                    });
+                  }
+                } else if (part?.type === "text" && typeof part.text === "string") {
+                  texts.push(part.text);
+                } else if (typeof part === "string") {
+                  texts.push(part);
+                } else {
+                  texts.push(JSON.stringify(part));
+                }
+              }
+              resp = texts.join("\n");
+            }
+
             let parsedResp = tryParseJSON(resp);
             if (parsedResp === null) {
               parsedResp = { result: resp };
@@ -206,6 +237,7 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
                 response: { result: parsedResp }
               }
             });
+            toolParts.push(...imageParts);
           }
           if (toolParts.length > 0) {
             result.contents.push({ role: GEMINI_ROLE.USER, parts: toolParts });

@@ -136,6 +136,32 @@ export function openaiResponsesToOpenAIRequest(model, body, stream, credentials)
         }
         pendingToolResults = [];
       }
+      // Codex view_image (and MCP image tools) return output as an array of
+      // content items, e.g. [{type:"input_image", image_url:"data:..."}].
+      // JSON.stringify'ing that embeds megabytes of base64 into a plain text
+      // string — Gemini then counts ~250k tokens per image and the context
+      // explodes. Convert to proper multimodal tool content instead.
+      if (Array.isArray(item.output) && item.output.some(p => p?.type === "input_image" || p?.type === "output_image" || p?.type === "image_url")) {
+        const multimodal = [];
+        for (const p of item.output) {
+          const url = p?.image_url ?? p?.url;
+          if ((p?.type === "input_image" || p?.type === "output_image" || p?.type === "image_url") && typeof url === "string" && url) {
+            multimodal.push({ type: OPENAI_BLOCK.IMAGE_URL, image_url: { url, detail: "auto" } });
+          } else if (p?.type === "output_text" || p?.type === "input_text" || p?.type === "text") {
+            multimodal.push({ type: OPENAI_BLOCK.TEXT, text: p.text ?? "" });
+          } else if (typeof p === "string") {
+            multimodal.push({ type: OPENAI_BLOCK.TEXT, text: p });
+          } else {
+            multimodal.push({ type: OPENAI_BLOCK.TEXT, text: JSON.stringify(p) });
+          }
+        }
+        result.messages.push({
+          role: ROLE.TOOL,
+          tool_call_id: item.call_id,
+          content: multimodal
+        });
+        continue;
+      }
       // Add tool result immediately
       result.messages.push({
         role: ROLE.TOOL,
