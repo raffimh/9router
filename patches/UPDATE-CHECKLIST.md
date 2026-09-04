@@ -14,9 +14,21 @@
 > atau GAGAL KERAS (tidak pernah half-patch), dan menjalankan gate verifikasi
 > (`node --check` semua file yang disentuh + assert marker string).
 
+**Sumber kebenaran script:** file `patches/apply-runtime-patches.mjs` di repo ini
+(branch `patched` — https://github.com/raffimh/9router). JANGAN bergantung pada
+salinan di folder temp — clone fork ke lokasi permanen sekali, lalu `git pull`
+setiap kali akan memakainya:
+
 ```powershell
-# 1. Apply + verify semua patch runtime (P1–P7)
-node "$env:LOCALAPPDATA\Temp\opencode\9router-fork\patches\apply-runtime-patches.mjs"
+# 0. Siapkan fork lokal PERMANEN (sekali saja) — jangan di folder Temp
+git clone -b patched https://github.com/raffimh/9router.git "$env:USERPROFILE\9router-fork"
+
+# Setiap kali akan memakai script — sinkronkan dengan branch patched:
+git -C "$env:USERPROFILE\9router-fork" pull origin patched
+
+# 1. Setelah 9router ter-update (npm update / npx 9router@latest), jalankan:
+node "$env:USERPROFILE\9router-fork\patches\apply-runtime-patches.mjs"
+#    → semua patch P1–P7 diterapkan + diverifikasi dalam satu perintah.
 
 # 2. Jika ada [FAIL]: pola minified berubah di versi baru → re-patch MANUAL
 #    sesuai section checklist yang dirujuk (2g/2i/2j/dll), lalu update pola
@@ -29,6 +41,9 @@ node "$env:LOCALAPPDATA\Temp\opencode\9router-fork\patches\apply-runtime-patches
 
 # 4. Commit + push perubahan (script + checklist) ke branch `patched`.
 ```
+
+**Ringkas:** setelah tiap update 9router, cukup `git pull` fork + jalankan script
+di atas — selesai. Sisa langkah hanya jika muncul `[FAIL]`.
 
 **Cakupan script saat ini (divalidasi live terhadap build v0.5.65):**
 P1 reasoning-only guard + envelope unwrap (kondisi **dan** body loop — jangan
