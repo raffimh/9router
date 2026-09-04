@@ -7,6 +7,42 @@
 
 ---
 
+## ⚡ Prosedur Standar Setelah Update (WAJIB — urut)
+
+> Sejak v0.5.65, patch runtime build **TIDAK lagi di-apply manual satu per satu**.
+> Gunakan script otomatis — idempotent (aman dijalankan berulang), exact-match
+> atau GAGAL KERAS (tidak pernah half-patch), dan menjalankan gate verifikasi
+> (`node --check` semua file yang disentuh + assert marker string).
+
+```powershell
+# 1. Apply + verify semua patch runtime (P1–P7)
+node "$env:LOCALAPPDATA\Temp\opencode\9router-fork\patches\apply-runtime-patches.mjs"
+
+# 2. Jika ada [FAIL]: pola minified berubah di versi baru → re-patch MANUAL
+#    sesuai section checklist yang dirujuk (2g/2i/2j/dll), lalu update pola
+#    `from`/`to` di script agar next update otomatis lagi.
+#    Catat pelajaran baru di section Post-mortem (pola: insiden TDZ v0.5.59,
+#    insiden accessor v0.5.65).
+
+# 3. Jika RESULT: OK → restart 9router + smoke test 1 request streaming,
+#    lalu hard-refresh browser (Ctrl+Shift+R) jika chunk CSS/theme ter-patch.
+
+# 4. Commit + push perubahan (script + checklist) ke branch `patched`.
+```
+
+**Cakupan script saat ini (divalidasi live terhadap build v0.5.65):**
+P1 reasoning-only guard + envelope unwrap (kondisi **dan** body loop — jangan
+hanya salah satu!), P2 cancel-usage hook, P3+P4 view_image multimodal,
+P5 usage di `response.completed` (pemicu auto-compact Codex), P6+P7 tema Dracula.
+
+**Di luar cakupan script (tetap manual/harness):** Qoder quota-112 (section 2b —
+penanganan 403 tersebar di banyak chunk, risiko salah patch tinggi), vision
+trimmer (section 2a), capabilities (section 2d), dan patch source-level lain
+yang butuh build ulang dari fork.
+
+---
+
+
 ## 🩹 Patch yang dikelola di sini
 
 | # | Patch | Masalah | Status upstream (v0.5.55) |
