@@ -8,7 +8,7 @@
  * Design rules (lessons from v0.5.59 TDZ + v0.5.65 accessor incidents):
  *  1. IDEMPOTENT — every patch checks isApplied() first and skips if present.
  *  2. EXACT-MATCH OR LOUD FAILURE — patterns are validated against a known
- *     build (v0.5.65). If the minified shape changed upstream, the script
+ *     build (v0.5.69). If the minified shape changed upstream, the script
  *     FAILS that patch and tells you which checklist section to redo by hand.
  *     It NEVER silently half-patches.
  *  3. VERIFY GATE — after applying, runs node --check on every touched file
@@ -61,8 +61,10 @@ const patches = [
     isApplied: (c) =>
       c.content.includes("(p.response?.candidates||p.candidates)?.[0]?.content?.parts)for(let a of (p.response?.candidates||p.candidates)[0].content.parts)") &&
       c.content.includes("reasoning-only turn"),
-    // pristine v0.5.65 upstream shape → patched shape (condition AND body together;
-    // patching only the condition caused `Cannot read properties of undefined (reading '0')`)
+    // pristine v0.5.69 upstream shape → patched shape (condition AND body together;
+    // patching only the condition caused `Cannot read properties of undefined (reading '0')`).
+    // v0.5.69 var map: state=B→C, content=D→E, thinking=E→F, terminalSeen=K→L,
+    //                  doneSent=M→N, emitted=H→I, finalize=O→P
     patterns: [
       {
         from: 'p.candidates?.[0]?.content?.parts)for(let a of p.candidates[0].content.parts)',
@@ -70,13 +72,13 @@ const patches = [
         count: 1,
       },
       {
-        from: 'let w=(0,d.Y8)(c,o,p,B);if(w?._openaiIntermediate)',
-        to: 'let w=(0,d.Y8)(c,o,p,B),_gf=c===e.h.GEMINI||c===e.h.GEMINI_CLI||c===e.h.VERTEX||c===e.h.ANTIGRAVITY;if(w?._openaiIntermediate)',
+        from: 'let w=(0,d.Y8)(c,o,p,C);if(w?._openaiIntermediate)',
+        to: 'let w=(0,d.Y8)(c,o,p,C),_gf=c===e.h.GEMINI||c===e.h.GEMINI_CLI||c===e.h.VERTEX||c===e.h.ANTIGRAVITY;if(w?._openaiIntermediate)',
         count: 1,
       },
       {
         from: 'if(w?.length>0)for(let a of w){if(null==a||!(0,h.c2)(a,o))continue;',
-        to: 'if(w?.length>0)for(let a of w){if(null==a||!(0,h.c2)(a,o))continue;if((o===e.h.OPENAI_RESPONSES||o===e.h.OPENAI)&&_gf&&!M&&(o===e.h.OPENAI_RESPONSES?(a?.event==="response.completed"||a?.type==="response.completed"||a?.data?.type==="response.completed"):!!a?.choices?.[0]?.finish_reason)&&0===D.length&&!(B?.geminiToolCallCount>0)&&E.length>0){(0,j.s)("SSE",`reasoning-only turn | format=${o} | thinking=${E.length} chars | replacing completion with retryable error`);if(o===e.h.OPENAI_RESPONSES){let a=(0,i.u9)();q?.appendConvertedChunk?.(a),f.enqueue(k.encode(a))}else{let a=\'data: {"error":{"message":"Reasoning-only turn completed without content; stream aborted for client retry","type":"stream_disconnected","code":"stream_disconnected"}}\\n\\n\';q?.appendConvertedChunk?.(a),f.enqueue(k.encode(a))}let b="data: [DONE]\\n\\n";q?.appendConvertedChunk?.(b),f.enqueue(k.encode(b)),K=!0,M=!0,H++;continue}',
+        to: 'if(w?.length>0)for(let a of w){if(null==a||!(0,h.c2)(a,o))continue;if((o===e.h.OPENAI_RESPONSES||o===e.h.OPENAI)&&_gf&&!N&&(o===e.h.OPENAI_RESPONSES?(a?.event==="response.completed"||a?.type==="response.completed"||a?.data?.type==="response.completed"):!!a?.choices?.[0]?.finish_reason)&&0===E.length&&!(C?.geminiToolCallCount>0)&&F.length>0){(0,j.s)("SSE",`reasoning-only turn | format=${o} | thinking=${F.length} chars | replacing completion with retryable error`);if(o===e.h.OPENAI_RESPONSES){let a=(0,i.u9)();q?.appendConvertedChunk?.(a),f.enqueue(k.encode(a))}else{let a=\'data: {"error":{"message":"Reasoning-only turn completed without content; stream aborted for client retry","type":"stream_disconnected","code":"stream_disconnected"}}\\n\\n\';q?.appendConvertedChunk?.(a),f.enqueue(k.encode(a))}let b="data: [DONE]\\n\\n";q?.appendConvertedChunk?.(b),f.enqueue(k.encode(b)),L=!0,N=!0,I++;continue}',
         count: 1,
       },
     ],
@@ -89,8 +91,10 @@ const patches = [
     isApplied: (c) => c.content.includes('cancel(a){(0,j.s)("SSE"'),
     patterns: [
       {
-        from: 'console.log("Error in flush:",a),O()}}}',
-        to: 'console.log("Error in flush:",a),O()},cancel(a){(0,j.s)("SSE",`cancel | provider=${p} | model=${t} | reason=${a?.message||a}`),O()}}}',
+        from: 'console.log("Error in flush:",a),P()}}}',
+        // v0.5.69 braces = [catch][flush][object]; try/catch is a STATEMENT, so
+        // `,cancel` must go AFTER the flush-closing brace, never the catch's.
+        to: 'console.log("Error in flush:",a),P()}},cancel(a){(0,j.s)("SSE",`cancel | provider=${p} | model=${t} | reason=${a?.message||a}`),P()}}',
         count: 1,
       },
     ],
@@ -117,8 +121,8 @@ const patches = [
     isApplied: (c) => c.content.includes("_imgs.push({inlineData"),
     patterns: [
       {
-        from: 'let d=i[c],e=(0,h.pT)(d);null===e?e={result:d}:"object"!=typeof e&&(e={result:e}),a.push({functionResponse:{id:c,name:l(b),response:{result:e}}})}a.length>0&&e.contents.push({role:j.RV.USER,parts:a})',
-        to: 'let d=i[c],_imgs=[];if(Array.isArray(d)){let _txts=[];for(let _p of d){let _u=_p?.image_url?.url??_p?.image_url??_p?.url;if("string"==typeof _u&&_u.startsWith("data:")){let _idx=_u.indexOf(",");_idx!==-1&&_imgs.push({inlineData:{mime_type:_u.substring(5,_idx).split(";")[0],data:_u.substring(_idx+1)}})}else if(_p?.type==="text"&&"string"==typeof _p.text){_txts.push(_p.text)}else if("string"==typeof _p){_txts.push(_p)}else{_txts.push(JSON.stringify(_p))}}d=_txts.join("\\n")}let e=(0,h.pT)(d);null===e?e={result:d}:"object"!=typeof e&&(e={result:e}),a.push({functionResponse:{id:c,name:l(b),response:{result:e}}}),a.push(..._imgs)}a.length>0&&e.contents.push({role:j.RV.USER,parts:a})',
+        from: 'let d=l[c],e=(0,i.pT)(d);null===e?e={result:d}:"object"!=typeof e&&(e={result:e}),a.push({functionResponse:{id:c,name:m(b),response:{result:e}}})}a.length>0&&g.contents.push({role:k.RV.USER,parts:a})',
+        to: 'let d=l[c],_imgs=[];if(Array.isArray(d)){let _txts=[];for(let _p of d){let _u=_p?.image_url?.url??_p?.image_url??_p?.url;if("string"==typeof _u&&_u.startsWith("data:")){let _idx=_u.indexOf(",");_idx!==-1&&_imgs.push({inlineData:{mime_type:_u.substring(5,_idx).split(";")[0],data:_u.substring(_idx+1)}})}else if(_p?.type==="text"&&"string"==typeof _p.text){_txts.push(_p.text)}else if("string"==typeof _p){_txts.push(_p)}else{_txts.push(JSON.stringify(_p))}}d=_txts.join("\\n")}let e=(0,i.pT)(d);null===e?e={result:d}:"object"!=typeof e&&(e={result:e}),a.push({functionResponse:{id:c,name:m(b),response:{result:e}}}),a.push(..._imgs)}a.length>0&&g.contents.push({role:k.RV.USER,parts:a})',
         count: 1,
       },
     ],

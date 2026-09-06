@@ -45,7 +45,7 @@ node "$env:USERPROFILE\9router-fork\patches\apply-runtime-patches.mjs"
 **Ringkas:** setelah tiap update 9router, cukup `git pull` fork + jalankan script
 di atas — selesai. Sisa langkah hanya jika muncul `[FAIL]`.
 
-**Cakupan script saat ini (divalidasi live terhadap build v0.5.65):**
+**Cakupan script saat ini (divalidasi live terhadap build v0.5.69):**
 P1 reasoning-only guard + envelope unwrap (kondisi **dan** body loop — jangan
 hanya salah satu!), P2 cancel-usage hook, P3+P4 view_image multimodal,
 P5 usage di `response.completed` (pemicu auto-compact Codex), P6+P7 tema Dracula.
@@ -615,3 +615,61 @@ build pakai skema Tailwind v4 `--color-*` (`--color-bg`, `--color-surface-2`,
 | Theme store | `static/chunks/1321-*.js` | `toggleTheme` (store=1, hook=4) |
 
 Nama chunk BERUBA tiap versi — selalu cari ulang via anchor, jangan hardcode.
+
+## ⚠️ Post-mortem patch v0.5.69 (2026-09-06) — pelajaran WAJIB
+
+Tiga kejadian saat re-apply patch ke build v0.5.69 (EBUSY + geser nama variabel
+minified + insiden koma setelah catch). Jangan diulang.
+
+### E1 — `npm error EBUSY` saat update: 9router masih berjalan
+
+`npm update -g 9router` gagal rename `node_modules\9router\app` (EBUSY) karena
+proses 9router masih hidup — termasuk proses yatim yang terminalnya sudah
+ditutup (`Get-CimInstance` menemukan PID yang parent-nya sudah mati). Windows
+mengunci file yang dimuat proses, npm tidak bisa me-rename foldernya.
+
+**Aturan:** SEBELUM update, selalu:
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+  Where-Object { $_.CommandLine -match '9router' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+```
+Jangan andalkan "sudah Ctrl+C di terminal" — cek proses yatim via CommandLine.
+
+### E2 — Peta variabel minified BERGESER (8895.js & 8499.js)
+
+Minifier menambah variabel closure baru di v0.5.69 sehingga SEMUA huruf setelah
+titik sisip bergeser satu huruf. Pemetaan v0.5.65 → v0.5.69 (8895.js):
+
+| Makna | v0.5.65 | v0.5.69 |
+|---|---|---|
+| state | `B` | `C` |
+| accumulatedContent | `D` (string) | `E` (string; `D` kini counter angka) |
+| accumulatedThinking | `E` | `F` |
+| openAIResponsesTerminalSeen | `K` | `L` |
+| streamDoneSent | `M` | `N` |
+| sseEmittedCount | `H` | `I` |
+| finalizeStream | `O()` | `P()` |
+
+8499.js (tool result): `i[c]`→`l[c]`, `(0,h.pT)`→`(0,i.pT)`, `l(b)`→`m(b)`,
+`e.contents`→`g.contents`, `j.RV`→`k.RV`.
+
+**Aturan:** JANGAN pernah asumsikan huruf variabel bertahan antar versi. Selalu
+grep anchor (`Error in flush`, `candidates`, `functionResponse`), baca konteks
+±300 char, petakan ulang variabelnya, baru tulis pola `from`/`to`.
+
+### E3 — `try/catch` adalah STATEMENT: koma setelah `}`-nya = SyntaxError
+
+P2 cancel disisipkan sebagai `}catch(a){...P()},cancel(a){...}` →
+`Unexpected token ','`. Koma setelah blok catch tidak valid karena try/catch
+bukan expression — `}` pertama setelah body catch menutup CATCH, bukan flush.
+Struktur v0.5.69: `...P()}catch(a){...P()}}}` = [catch][flush][object].
+
+**Pola fix yang benar:** sisipkan `cancel` setelah brace penutup FLUSH:
+```js
+from: '...P()}}}'                                    // [catch][flush][object]
+to:   '...P()}},cancel(a){...P()}}'                   // [catch][flush][cancel][object]
+```
+`node --check` menangkap ini (sintaks), jadi gate verifikasi bekerja — build
+tidak sempat dipakai rusak. Kombinasikan dengan bisect: reverse patch satu per
+satu untuk mengisolasi patch yang merusak.
