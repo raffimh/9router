@@ -121,8 +121,8 @@ const patches = [
     isApplied: (c) => c.content.includes("_imgs.push({inlineData"),
     patterns: [
       {
-        from: 'let d=l[c],e=(0,i.pT)(d);null===e?e={result:d}:"object"!=typeof e&&(e={result:e}),a.push({functionResponse:{id:c,name:m(b),response:{result:e}}})}a.length>0&&g.contents.push({role:k.RV.USER,parts:a})',
-        to: 'let d=l[c],_imgs=[];if(Array.isArray(d)){let _txts=[];for(let _p of d){let _u=_p?.image_url?.url??_p?.image_url??_p?.url;if("string"==typeof _u&&_u.startsWith("data:")){let _idx=_u.indexOf(",");_idx!==-1&&_imgs.push({inlineData:{mime_type:_u.substring(5,_idx).split(";")[0],data:_u.substring(_idx+1)}})}else if(_p?.type==="text"&&"string"==typeof _p.text){_txts.push(_p.text)}else if("string"==typeof _p){_txts.push(_p)}else{_txts.push(JSON.stringify(_p))}}d=_txts.join("\\n")}let e=(0,i.pT)(d);null===e?e={result:d}:"object"!=typeof e&&(e={result:e}),a.push({functionResponse:{id:c,name:m(b),response:{result:e}}}),a.push(..._imgs)}a.length>0&&g.contents.push({role:k.RV.USER,parts:a})',
+        from: 'let e=(0,i.pT)(c);null===e?e={result:c}:"object"!=typeof e&&(e={result:e}),a.push({functionResponse:{id:b,name:m(d),response:{result:e}}})}a.length>0&&g.contents.push({role:k.RV.USER,parts:a})',
+        to: 'let _imgs=[];if(Array.isArray(c)){let _txts=[];for(let _p of c){let _u=_p?.image_url?.url??_p?.image_url??_p?.url;if("string"==typeof _u&&_u.startsWith("data:")){let _idx=_u.indexOf(",");_idx!==-1&&_imgs.push({inlineData:{mime_type:_u.substring(5,_idx).split(";")[0],data:_u.substring(_idx+1)}})}else if(_p?.type==="text"&&"string"==typeof _p.text){_txts.push(_p.text)}else if("string"==typeof _p){_txts.push(_p)}else{_txts.push(JSON.stringify(_p))}}c=_txts.join("\\n")}let e=(0,i.pT)(c);null===e?e={result:c}:"object"!=typeof e&&(e={result:e}),a.push({functionResponse:{id:b,name:m(d),response:{result:e}}}),a.push(..._imgs)}a.length>0&&g.contents.push({role:k.RV.USER,parts:a})',
         count: 1,
       },
     ],
@@ -154,16 +154,16 @@ const patches = [
     id: "P7 dracula theme: theme store chunk (apply + 3-state toggle)",
     checklist: "2j (store chunk)",
     find: () => readChunk(ST_CHUNKS, "toggleTheme"),
-    isApplied: (c) => c.content.includes('"dracula"===t') && c.content.includes('"dracula"===i().theme?"light"'),
+    isApplied: (c) => c.content.includes('"dracula"===t') && c.content.includes('"dracula"===a().theme?"light"'),
     patterns: [
       {
-        from: 'function s(e){let i=document.documentElement,a=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";"dark"===("system"===e?a:e)?i.classList.add("dark"):i.classList.remove("dark")}',
-        to: 'function s(e){let i=document.documentElement,a=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";let t="system"===e?a:e;if("dracula"===t){i.classList.add("dark","dracula"),i.setAttribute("data-theme","dracula")}else{i.classList.remove("dracula"),i.removeAttribute("data-theme"),"dark"===t?i.classList.add("dark"):i.classList.remove("dark")}}',
+        from: 'function s(e){let a=document.documentElement,i=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";"dark"===("system"===e?i:e)?a.classList.add("dark"):a.classList.remove("dark")}',
+        to: 'function s(e){let a=document.documentElement,i=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";let t="system"===e?i:e;if("dracula"===t){a.classList.add("dark","dracula"),a.setAttribute("data-theme","dracula")}else{a.classList.remove("dracula"),a.removeAttribute("data-theme"),"dark"===t?a.classList.add("dark"):a.classList.remove("dark")}}',
         count: 1,
       },
       {
-        from: 'toggleTheme:()=>{let a="dark"===i().theme?"light":"dark";e({theme:a}),s(a)}',
-        to: 'toggleTheme:()=>{let a="dark"===i().theme?"dracula":"dracula"===i().theme?"light":"dark";e({theme:a}),s(a)}',
+        from: 'toggleTheme:()=>{let i="dark"===a().theme?"light":"dark";e({theme:i}),s(i)}',
+        to: 'toggleTheme:()=>{let i="dark"===a().theme?"dracula":"dracula"===a().theme?"light":"dark";e({theme:i}),s(i)}',
         count: 1,
       },
     ],

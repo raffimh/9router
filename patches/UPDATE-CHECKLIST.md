@@ -673,3 +673,23 @@ to:   '...P()}},cancel(a){...P()}}'                   // [catch][flush][cancel][
 `node --check` menangkap ini (sintaks), jadi gate verifikasi bekerja — build
 tidak sempat dipakai rusak. Kombinasikan dengan bisect: reverse patch satu per
 satu untuk mengisolasi patch yang merusak.
+
+---
+
+## 📌 Post-mortem v0.5.75 (P4 upstream structure shift & P7 var swap)
+
+### E4 — P4: Upstream menambahkan guard `n.some` dan merestruktur loop toolResponse
+Di v0.5.75, upstream menambahkan `if(n.some(a=>void 0!==l[a])||p){let a=[];for(let b of n){...}}`.
+Loop fid tidak lagi menggunakan iterator `c`, melainkan `b of n`, dan response adalah `c = l[b]`.
+Pola `from` P4 disederhanakan ke titik penargetan:
+```js
+from: 'let e=(0,i.pT)(c);null===e?e={result:c}:"object"!=typeof e&&(e={result:e}),a.push({functionResponse:{id:b,name:m(d),response:{result:e}}})}a.length>0&&g.contents.push({role:k.RV.USER,parts:a})'
+```
+sehingga tetap kompatibel dan menginjeksi inlineData gambar `_imgs` ke array `a`.
+
+### E5 — P7: Swap variabel minified `a` dan `i` pada theme store
+Di v0.5.75 (chunk `1321-b7836dc184959aa5.js`), variabel `document.documentElement` dan `matchMedia` bertukar:
+`a=document.documentElement,i=window.matchMedia(...)` (sebelumnya `i=documentElement,a=matchMedia`).
+Begitu juga pada `toggleTheme`: `let i="dark"===a().theme?...` (sebelumnya `let a="dark"===i().theme?...`).
+Pola `from`/`to` dan `isApplied` diupdate untuk merefleksikan penamaan baru.
+
