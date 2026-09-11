@@ -2,6 +2,7 @@ import { register } from "../index.js";
 import { FORMATS } from "../formats.js";
 import { DEFAULT_THINKING_AG_SIGNATURE, DEFAULT_THINKING_GEMINI_CLI_SIGNATURE } from "../../config/defaultThinkingSignature.js";
 import { openaiToClaudeRequestForAntigravity } from "./openai-to-claude.js";
+import { getGeminiThoughtSignatureSync } from "../../services/thoughtSignatureStore.js";
 function generateUUID() {
   return crypto.randomUUID();
 }
@@ -14,7 +15,8 @@ import {
   generateRequestId,
   generateSessionId,
   generateProjectId,
-  cleanJSONSchemaForAntigravity
+  cleanJSONSchemaForAntigravity,
+  normalizeGeminiContents
 } from "../formats/gemini.js";
 import { deriveSessionId, toNumericSessionId } from "../../utils/sessionManager.js";
 import { ROLE, GEMINI_ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.js";
@@ -53,9 +55,8 @@ function normalizeGeminiContents(contents) {
 function hasSubstantiveParts(parts) {
   return parts.some(p => !p.thought && (p.text || p.functionCall));
 }
-
 // Core: Convert OpenAI request to Gemini format (base for all variants)
-function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG_SIGNATURE) {
+function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG_SIGNATURE, sessionId = null) {
   const result = {
     model: model,
     contents: [],
@@ -142,18 +143,27 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
 
         if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
           const toolCallIds = [];
+          let firstFunctionCallSeen = false;
           for (const tc of msg.tool_calls) {
             if (tc.type !== OPENAI_BLOCK.FUNCTION) continue;
 
             const args = tryParseJSON(tc.function?.arguments || "{}") ?? {};
-            parts.push({
-              thoughtSignature: signature,
+            const cachedSig = tc.id ? getGeminiThoughtSignatureSync(tc.id, sessionId) : null;
+            // First call gets cached signature or fallback; sibling calls remain unsigned if no cached sig
+            const callSig = cachedSig || (!firstFunctionCallSeen ? signature : undefined);
+            firstFunctionCallSeen = true;
+
+            const part = {
               functionCall: {
                 id: tc.id,
                 name: sanitizeGeminiFunctionName(tc.function.name),
                 args: args
               }
-            });
+            };
+            if (callSig) {
+              part.thoughtSignature = callSig;
+            }
+            parts.push(part);
             toolCallIds.push(tc.id);
           }
 
@@ -161,86 +171,86 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
             result.contents.push({ role: GEMINI_ROLE.MODEL, parts });
           }
 
-          // Gemini rejects the whole request with 400 INVALID_ARGUMENT when a
-          // functionCall part has no matching functionResponse part. Empty (""
-          // or null) tool results and aborted runs (no result message at all)
-          // previously produced dangling calls that poisoned every later
-          // request of the session. Always answer each call: real result when
-          // present, synthetic placeholder otherwise.
-          const toolParts = [];
-          for (const fid of toolCallIds) {
-            let name = tcID2Name[fid];
-            if (!name) {
-              const idParts = fid.split("-");
-              if (idParts.length > 2) {
-                name = idParts.slice(0, -2).join("-");
-              } else {
-                name = fid;
-              }
-            }
+          // Check if there are actual tool responses in the next messages
+          const isIntermediate = i < body.messages.length - 1;
+          const hasActualResponses = toolCallIds.some(fid => toolResponses[fid] !== undefined);
 
-            if (!Object.hasOwn(toolResponses, fid)) {
+          if (hasActualResponses || isIntermediate) {
+            const toolParts = [];
+            for (const fid of toolCallIds) {
+              let name = tcID2Name[fid];
+              if (!name) {
+                const idParts = fid.split("-");
+                if (idParts.length > 2) {
+                  name = idParts.slice(0, -2).join("-");
+                } else {
+                  name = fid;
+                }
+              }
+
+              if (!Object.hasOwn(toolResponses, fid)) {
+                toolParts.push({
+                  functionResponse: {
+                    id: fid,
+                    name: sanitizeGeminiFunctionName(name),
+                    response: { result: "(no tool result returned)" }
+                  }
+                });
+                continue;
+              }
+
+              let resp = toolResponses[fid];
+              if (resp === null || resp === undefined) resp = "";
+
+              // Multimodal tool result (e.g. Codex view_image): content is an array
+              // holding image_url blocks. Emit the images as inlineData parts next to
+              // the functionResponse instead of embedding base64 into the JSON —
+              // Gemini counts embedded base64 as text tokens (~250k per image).
+              const imageParts = [];
+              if (Array.isArray(resp)) {
+                const texts = [];
+                for (const part of resp) {
+                  const url = part?.image_url?.url ?? part?.image_url ?? part?.url;
+                  if (typeof url === "string" && url.startsWith("data:")) {
+                    const commaIndex = url.indexOf(",");
+                    if (commaIndex !== -1) {
+                      imageParts.push({
+                        inlineData: {
+                          mime_type: url.substring(5, commaIndex).split(";")[0],
+                          data: url.substring(commaIndex + 1)
+                        }
+                      });
+                    }
+                  } else if (part?.type === "text" && typeof part.text === "string") {
+                    texts.push(part.text);
+                  } else if (typeof part === "string") {
+                    texts.push(part);
+                  } else {
+                    texts.push(JSON.stringify(part));
+                  }
+                }
+                resp = texts.join("\n");
+              }
+
+              let parsedResp = tryParseJSON(resp);
+              if (parsedResp === null) {
+                parsedResp = { result: resp };
+              } else if (typeof parsedResp !== "object") {
+                parsedResp = { result: parsedResp };
+              }
+
               toolParts.push({
                 functionResponse: {
                   id: fid,
                   name: sanitizeGeminiFunctionName(name),
-                  response: { result: "(no tool result returned)" }
+                  response: { result: parsedResp }
                 }
               });
-              continue;
+              toolParts.push(...imageParts);
             }
-
-            let resp = toolResponses[fid];
-            if (resp === null || resp === undefined) resp = "";
-
-            // Multimodal tool result (e.g. Codex view_image): content is an array
-            // holding image_url blocks. Emit the images as inlineData parts next to
-            // the functionResponse instead of embedding base64 into the JSON —
-            // Gemini counts embedded base64 as text tokens (~250k per image).
-            const imageParts = [];
-            if (Array.isArray(resp)) {
-              const texts = [];
-              for (const part of resp) {
-                const url = part?.image_url?.url ?? part?.image_url ?? part?.url;
-                if (typeof url === "string" && url.startsWith("data:")) {
-                  const commaIndex = url.indexOf(",");
-                  if (commaIndex !== -1) {
-                    imageParts.push({
-                      inlineData: {
-                        mime_type: url.substring(5, commaIndex).split(";")[0],
-                        data: url.substring(commaIndex + 1)
-                      }
-                    });
-                  }
-                } else if (part?.type === "text" && typeof part.text === "string") {
-                  texts.push(part.text);
-                } else if (typeof part === "string") {
-                  texts.push(part);
-                } else {
-                  texts.push(JSON.stringify(part));
-                }
-              }
-              resp = texts.join("\n");
+            if (toolParts.length > 0) {
+              result.contents.push({ role: GEMINI_ROLE.USER, parts: toolParts });
             }
-
-            let parsedResp = tryParseJSON(resp);
-            if (parsedResp === null) {
-              parsedResp = { result: resp };
-            } else if (typeof parsedResp !== "object") {
-              parsedResp = { result: parsedResp };
-            }
-
-            toolParts.push({
-              functionResponse: {
-                id: fid,
-                name: sanitizeGeminiFunctionName(name),
-                response: { result: parsedResp }
-              }
-            });
-            toolParts.push(...imageParts);
-          }
-          if (toolParts.length > 0) {
-            result.contents.push({ role: GEMINI_ROLE.USER, parts: toolParts });
           }
         } else if (hasSubstantiveParts(parts)) {
           result.contents.push({ role: GEMINI_ROLE.MODEL, parts });
@@ -284,13 +294,13 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
 }
 
 // OpenAI -> Gemini (standard API)
-export function openaiToGeminiRequest(model, body, stream) {
-  return openaiToGeminiBase(model, body, stream);
+export function openaiToGeminiRequest(model, body, stream, credentials = null) {
+  return openaiToGeminiBase(model, body, stream, DEFAULT_THINKING_AG_SIGNATURE, credentials?._clientSessionId);
 }
 
 // OpenAI -> Gemini CLI (Cloud Code Assist)
-export function openaiToGeminiCLIRequest(model, body, stream) {
-  const gemini = openaiToGeminiBase(model, body, stream, DEFAULT_THINKING_GEMINI_CLI_SIGNATURE);
+export function openaiToGeminiCLIRequest(model, body, stream, credentials = null) {
+  const gemini = openaiToGeminiBase(model, body, stream, DEFAULT_THINKING_GEMINI_CLI_SIGNATURE, credentials?._clientSessionId);
   // Thinking is normalized centrally by applyThinking (thinkingUnified.js) after translation.
 
   // Clean schema for tools
@@ -387,18 +397,26 @@ function wrapInCloudCodeEnvelopeForClaude(model, claudeRequest, credentials = nu
       const parts = [];
 
       if (Array.isArray(msg.content)) {
+        let firstToolUseSeen = false;
         for (const block of msg.content) {
           if (block.type === CLAUDE_BLOCK.TEXT) {
             parts.push({ text: block.text });
           } else if (block.type === CLAUDE_BLOCK.TOOL_USE) {
-            parts.push({
-              thoughtSignature: signature,
+            const cachedSig = block.id ? getGeminiThoughtSignatureSync(block.id, credentials?._clientSessionId) : null;
+            const callSig = cachedSig || (!firstToolUseSeen ? signature : undefined);
+            firstToolUseSeen = true;
+
+            const part = {
               functionCall: {
                 id: block.id,
                 name: sanitizeGeminiFunctionName(block.name),
                 args: block.input || {}
               }
-            });
+            };
+            if (callSig) {
+              part.thoughtSignature = callSig;
+            }
+            parts.push(part);
           } else if (block.type === CLAUDE_BLOCK.TOOL_RESULT) {
             let content = block.content;
             if (Array.isArray(content)) {

@@ -101,4 +101,15 @@ describe("getCapabilitiesForModel", () => {
     expect(caps).toMatchObject({ audioOutput: true, tools: false, contextWindow: 8192 });
     expect(caps.reasoning).toBe(false);
   });
+
+  it("reports Codex GPT 6.0 Astra as a vision and thinking capable model", () => {
+    expect(getCapabilitiesForModel("codex", "gpt-6-astra")).toMatchObject({
+      vision: true,
+      reasoning: true,
+      search: true,
+      thinkingFormat: "openai",
+      contextWindow: 272000,
+      maxOutput: 128000,
+    });
+  });
 });
