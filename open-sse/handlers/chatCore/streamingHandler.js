@@ -3,8 +3,9 @@ import { needsTranslation } from "../../translator/index.js";
 import { createSSETransformStreamWithLogger, createPassthroughStreamWithLogger } from "../../utils/stream.js";
 import { pipeWithDisconnect } from "../../utils/streamHandler.js";
 import { PROVIDERS } from "../../config/providers.js";
-import { STREAM_STALL_TIMEOUT_MS } from "../../config/runtimeConfig.js";
+import { HTTP_STATUS, STREAM_STALL_TIMEOUT_MS } from "../../config/runtimeConfig.js";
 import { buildAbortedResponsesTerminalBytes } from "../../utils/responsesStreamHelpers.js";
+import { buildStreamErrorBytes } from "../../utils/streamHelpers.js";
 import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail.js";
 import { saveRequestDetail } from "@/lib/usageDb.js";
 import { SSE_HEADERS_CORS as SSE_HEADERS } from "../../utils/sseConstants.js";
@@ -84,8 +85,11 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
   // Responses clients: synthesize response.failed + [DONE] if the stream aborts/stalls
   // before a terminal event — passthrough AND translated (e.g. codex -> antigravity),
   // so clients like Codex retry instead of seeing a bare connection close.
+  // Every other client format gets the OpenAI error frame + [DONE], or `event: error` for Claude.
   const isResponsesClient = sourceFormat === FORMATS.OPENAI_RESPONSES;
-  const onAbortTerminal = isResponsesClient ? buildAbortedResponsesTerminalBytes : null;
+  const onAbortTerminal = isResponsesClient
+    ? buildAbortedResponsesTerminalBytes
+    : (message) => buildStreamErrorBytes(HTTP_STATUS.GATEWAY_TIMEOUT, message, sourceFormat);
   const stallTimeoutMs = PROVIDERS[provider]?.stallTimeoutMs || STREAM_STALL_TIMEOUT_MS;
   // Shorter watchdog while zero upstream bytes have arrived (hung connection vs slow thinking)
   const firstByteTimeoutMs = PROVIDERS[provider]?.stallFirstByteMs || null;
