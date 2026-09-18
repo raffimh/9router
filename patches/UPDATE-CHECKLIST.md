@@ -693,3 +693,11 @@ Di v0.5.75 (chunk `1321-b7836dc184959aa5.js`), variabel `document.documentElemen
 Begitu juga pada `toggleTheme`: `let i="dark"===a().theme?...` (sebelumnya `let a="dark"===i().theme?...`).
 Pola `from`/`to` dan `isApplied` diupdate untuk merefleksikan penamaan baru.
 
+---
+
+## 📌 Update v0.5.81 (Semua pola P1–P7 100% cocok)
+Di v0.5.81, seluruh pola minified P1–P7 stabil dan identik dengan perbaikan v0.5.75.
+Chunk theme store berpindah nama ke `1321-f85d28e9e6721ee8.js` dan terdeteksi dinamis secara otomatis oleh script `readChunk(ST_CHUNKS, "toggleTheme")`.
+Verifikasi `RESULT: OK` lolos tanpa penyesuaian pola tambahan.
+
+
