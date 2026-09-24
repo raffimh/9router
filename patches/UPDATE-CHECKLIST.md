@@ -700,4 +700,30 @@ Di v0.5.81, seluruh pola minified P1–P7 stabil dan identik dengan perbaikan v0
 Chunk theme store berpindah nama ke `1321-f85d28e9e6721ee8.js` dan terdeteksi dinamis secara otomatis oleh script `readChunk(ST_CHUNKS, "toggleTheme")`.
 Verifikasi `RESULT: OK` lolos tanpa penyesuaian pola tambahan.
 
+---
+
+## 📌 Update v0.5.86 (P5 di-retire — diimplementasikan native oleh upstream)
+
+### E6 — P5 resmi tidak dibutuhkan lagi
+Upstream v0.5.86 (commit `da004655` — "fix(responses): report usage on response.completed
+so clients can auto-compact") mengimplementasikan fix yang identik dengan P5 secara native:
+konverter `openaiToOpenAIResponsesResponse` kini menyimpan `state.responsesUsage`
+(via `toResponsesUsage()`) dan `sendCompleted()` meng-embed `usage` ke payload
+`response.completed`. Pola pristine P5 sudah tidak ada di build → patch P5 di-retire
+dari script dengan flag `skip: true` (status SKIP di output, bukan FAIL).
+
+### Konflik merge v0.5.86 yang diselesaikan
+1. `capabilities.js` (blok MiMo): upstream merevisi semantik MiMo — SEMUA varian
+   v2.5/v2.6 kini vision-capable (`<think>`-tag reasoning, always-on, thinkingFormat
+   `deepseek`). Blok lama warisan patch "MiMo split" (v2.5-pro/v2-pro/v2-flash
+   text-only + TTS 8k) dihapus mengikuti upstream; test lama ("MiMo v2.5 Pro as
+   text-only", "MiMo v2 pro/flash", "MiMo TTS audio-out") dihapus dari
+   `capabilities.test.js` karena digantikan describe block baru upstream.
+2. `openai-responses.js` (`sendCompleted`): HEAD memakai `...(usage ? { usage } : {})`
+   (bentuk P5 kita), master memakai `...(state.responsesUsage ? ...)` — diambil
+   versi master (native, lebih lengkap dengan detail cached/reasoning tokens).
+3. Pola P1, P2, P3, P4, P7 100% cocok tanpa perubahan; chunk theme store kini
+   `1321-6ced1223fc1b20f6.js` (terdeteksi dinamis).
+
+
 

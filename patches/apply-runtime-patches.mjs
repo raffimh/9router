@@ -129,18 +129,12 @@ const patches = [
     markers: ["_imgs.push({inlineData"],
   },
   {
-    id: "P5 responses: embed usage in response.completed (auto-compact trigger)",
-    checklist: "2e (chunk step)",
-    loadName: "8499.js",
-    isApplied: (c) => c.content.includes("usage:h}})}else b(") && c.content.includes("total_tokens:c.total_tokens??(d+e)"),
-    patterns: [
-      {
-        from: 'a.completedSent=!0,b("response.completed",{type:"response.completed",response:{id:a.responseId,object:"response",created_at:a.created,status:"completed",background:!1,error:null}})',
-        to: 'a.completedSent=!0,function(c){let d=c?(c.prompt_tokens??c.input_tokens??0):0,e=c?(c.completion_tokens??c.output_tokens??0):0;if(d||e){let f=c.cached_tokens??c.prompt_tokens_details?.cached_tokens??0,g=c.reasoning_tokens??c.completion_tokens_details?.reasoning_tokens??0,h={input_tokens:d,input_tokens_details:{cached_tokens:f},output_tokens:e,output_tokens_details:{reasoning_tokens:g},total_tokens:c.total_tokens??(d+e)};b("response.completed",{type:"response.completed",response:{id:a.responseId,object:"response",created_at:a.created,status:"completed",background:!1,error:null,usage:h}})}else b("response.completed",{type:"response.completed",response:{id:a.responseId,object:"response",created_at:a.created,status:"completed",background:!1,error:null}})}(a.usage)',
-        count: 1,
-      },
-    ],
-    markers: ["total_tokens:c.total_tokens??(d+e)"],
+    id: "P5 responses: embed usage in response.completed — SUPERSEDED upstream in v0.5.86 (commit da004655: state.responsesUsage)",
+    checklist: "2e (native since v0.5.86)",
+    skip: true,
+    isApplied: () => true,
+    patterns: [],
+    markers: [],
   },
   {
     id: "P6 dracula theme: CSS variables",
@@ -201,6 +195,10 @@ function applyDraculaCss() {
 // ---------------------------------------------------------------------------
 for (const patch of patches) {
   try {
+    if (patch.skip) {
+      results.push({ id: patch.id, status: "SKIP", note: "superseded — no longer required" });
+      continue;
+    }
     const chunk = patch.css ? null : (patch.loadName ? loadChunk(CHUNKS, patch.loadName) : patch.find());
     if (!chunk && !patch.css) {
       results.push({ id: patch.id, status: "SKIP", note: "target chunk not found (marker missing)" });
