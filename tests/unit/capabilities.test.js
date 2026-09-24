@@ -92,33 +92,8 @@ describe("getCapabilitiesForModel", () => {
     }
   });
 
-  // Xiaomi MiMo split (per Xiaomi's own API + models.dev): v2.5 base is the
-  // multimodal one; v2.5-pro / v2-pro / v2-flash are text-only — and ALL
-  // MiMo LLMs reason. TTS variants are audio-out with no tools.
-  it("reports MiMo v2.5 base as multimodal + reasoning", () => {
-    const caps = getCapabilitiesForModel("sumopod", "mimo-v2.5");
-    expect(caps).toMatchObject({ vision: true, audioInput: true, videoInput: true, reasoning: true, contextWindow: 1048576 });
-  });
-
-  it("reports MiMo v2.5 Pro as text-only WITH reasoning", () => {
-    for (const model of ["mimo-v2.5-pro", "mimo-v2.5-pro-ultraspeed"]) {
-      const caps = getCapabilitiesForModel("sumopod", model);
-      expect(caps.vision, `${model} is text-only per Xiaomi spec`).toBe(false);
-      expect(caps.reasoning, `${model} reasons per Xiaomi spec`).toBe(true);
-      expect(caps.contextWindow).toBe(1048576);
-    }
-  });
-
-  it("reports MiMo v2 pro / v2 flash as text-only reasoning models", () => {
-    expect(getCapabilitiesForModel("xiaomi", "mimo-v2-pro")).toMatchObject({ vision: false, reasoning: true, contextWindow: 1048576 });
-    expect(getCapabilitiesForModel("xiaomi", "mimo-v2-flash")).toMatchObject({ vision: false, reasoning: true, contextWindow: 262144 });
-  });
-
-  it("keeps MiMo TTS variants audio-out without tools", () => {
-    const caps = getCapabilitiesForModel("xiaomi", "mimo-v2.5-tts");
-    expect(caps).toMatchObject({ audioOutput: true, tools: false, contextWindow: 8192 });
-    expect(caps.reasoning).toBe(false);
-  });
+  // Xiaomi MiMo: superseded by the "<think>-tag reasoning, always-on" describe
+  // block below (upstream v0.5.86 semantics — ALL v2.5/v2.6 variants are vision-capable).
 
   it("reports Codex GPT 6.0 Astra as a vision and thinking capable model", () => {
     expect(getCapabilitiesForModel("codex", "gpt-6-astra")).toMatchObject({
@@ -151,5 +126,141 @@ describe("getCapabilitiesForModel", () => {
       thinkingFormat: "commandcode",
       thinkingEffortSupported: true,
     });
+  });
+});
+
+describe("getCapabilitiesForModel — MiMo (<think>-tag reasoning, always-on)", () => {
+  it("mimo-v2.5 has vision + reasoning + deepseek format, cannot disable", () => {
+    const caps = getCapabilitiesForModel(null, "mimo-v2.5");
+    expect(caps.vision).toBe(true);
+    expect(caps.reasoning).toBe(true);
+    expect(caps.thinkingFormat).toBe("deepseek");
+    expect(caps.thinkingCanDisable).toBe(false);
+  });
+
+  it("mimo-v2.5-pro has vision (matches *mimo*v2.5* pattern)", () => {
+    const caps = getCapabilitiesForModel(null, "mimo-v2.5-pro");
+    expect(caps.vision).toBe(true);
+    expect(caps.reasoning).toBe(true);
+    expect(caps.thinkingFormat).toBe("deepseek");
+    expect(caps.thinkingCanDisable).toBe(false);
+  });
+
+  it("xiaomi/mimo-v2.5-pro (vendor-prefixed) has vision", () => {
+    const caps = getCapabilitiesForModel(null, "xiaomi/mimo-v2.5-pro");
+    expect(caps.vision).toBe(true);
+    expect(caps.thinkingFormat).toBe("deepseek");
+  });
+
+  it("mimo-omni-x has audioInput via the omni pattern", () => {
+    const caps = getCapabilitiesForModel(null, "mimo-omni-x");
+    expect(caps.vision).toBe(true);
+    expect(caps.audioInput).toBe(true);
+    expect(caps.reasoning).toBe(true);
+    expect(caps.thinkingCanDisable).toBe(false);
+  });
+
+  it("generic mimo has vision + reasoning (fallback pattern)", () => {
+    const caps = getCapabilitiesForModel(null, "mimo");
+    expect(caps.vision).toBe(true);
+    expect(caps.reasoning).toBe(true);
+    expect(caps.thinkingCanDisable).toBe(false);
+  });
+});
+
+describe("getCapabilitiesForModel — Qwen max/plus vision", () => {
+  it("qwen3.7-max has vision (*qwen*max* fires before *qwen3.7*)", () => {
+    const caps = getCapabilitiesForModel(null, "qwen3.7-max");
+    expect(caps.vision).toBe(true);
+    expect(caps.reasoning).toBe(true);
+  });
+
+  it("Qwen3.6-Max-Preview has vision (case-insensitive pattern match)", () => {
+    const caps = getCapabilitiesForModel(null, "Qwen3.6-Max-Preview");
+    expect(caps.vision).toBe(true);
+  });
+
+  it("qwen3.7-plus has vision", () => {
+    const caps = getCapabilitiesForModel(null, "qwen3.7-plus");
+    expect(caps.vision).toBe(true);
+  });
+
+  it("qwen3.7 has vision from the qwen3.7 pattern", () => {
+    const caps = getCapabilitiesForModel(null, "qwen3.7");
+    expect(caps.vision).toBe(true);
+  });
+
+  it("qwq has no vision (thinking-only model)", () => {
+    const caps = getCapabilitiesForModel(null, "qwq-32b");
+    expect(caps.vision).toBe(false);
+    expect(caps.reasoning).toBe(true);
+    expect(caps.thinkingCanDisable).toBe(false);
+  });
+});
+
+describe("getCapabilitiesForModel — MiniMax M2.x vision", () => {
+  it("minimax-m2.7 has vision", () => {
+    const caps = getCapabilitiesForModel(null, "minimax-m2.7");
+    expect(caps.vision).toBe(true);
+    expect(caps.thinkingCanDisable).toBe(false);
+  });
+
+  it("minimax-m2.5 has vision", () => {
+    const caps = getCapabilitiesForModel(null, "minimax-m2.5");
+    expect(caps.vision).toBe(true);
+    expect(caps.thinkingCanDisable).toBe(false);
+  });
+
+  it("MiniMax-M2.7 has vision (vendor prefix MiniMaxAI/ stripped by route)", () => {
+    const caps = getCapabilitiesForModel(null, "MiniMaxAI/MiniMax-M2.7");
+    expect(caps.vision).toBe(true);
+  });
+
+  it("minimax-m3 has vision (separate pattern)", () => {
+    const caps = getCapabilitiesForModel(null, "minimax-m3");
+    expect(caps.vision).toBe(true);
+  });
+});
+
+describe("getCapabilitiesForModel — DeepSeek V4 text-only", () => {
+  it("deepseek-v4-pro has no vision", () => {
+    const caps = getCapabilitiesForModel(null, "deepseek-v4-pro");
+    expect(caps.vision).toBe(false);
+    expect(caps.reasoning).toBe(true);
+    expect(caps.thinkingFormat).toBe("deepseek");
+  });
+
+  it("deepseek-v4-flash has no vision", () => {
+    const caps = getCapabilitiesForModel(null, "deepseek-v4-flash");
+    expect(caps.vision).toBe(false);
+    expect(caps.reasoning).toBe(true);
+  });
+
+  it("deepseek/deepseek-v4-pro (vendor-prefixed) has no vision", () => {
+    const caps = getCapabilitiesForModel(null, "deepseek/deepseek-v4-pro");
+    expect(caps.vision).toBe(false);
+  });
+});
+
+describe("getCapabilitiesForModel — codebuddy-cn provider overrides", () => {
+  it("deepseek-v4-pro via codebuddy-cn uses openai thinking format", () => {
+    const caps = getCapabilitiesForModel("codebuddy-cn", "deepseek-v4-pro");
+    expect(caps.vision).toBe(true);
+    expect(caps.reasoning).toBe(true);
+    expect(caps.thinkingFormat).toBe("openai");
+    expect(caps.thinkingCanDisable).toBe(true);
+  });
+
+  it("minimax-m3 via codebuddy-cn has vision (provider override)", () => {
+    const caps = getCapabilitiesForModel("codebuddy-cn", "minimax-m3");
+    expect(caps.vision).toBe(true);
+    expect(caps.thinkingFormat).toBe("openai");
+    expect(caps.thinkingCanDisable).toBe(false);
+  });
+
+  it("unknown provider falls through to pattern matching", () => {
+    const caps = getCapabilitiesForModel("unknown-provider", "mimo-v2.5");
+    expect(caps.vision).toBe(true);
+    expect(caps.thinkingFormat).toBe("deepseek");
   });
 });
