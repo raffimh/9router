@@ -725,5 +725,22 @@ dari script dengan flag `skip: true` (status SKIP di output, bukan FAIL).
 3. Pola P1, P2, P3, P4, P7 100% cocok tanpa perubahan; chunk theme store kini
    `1321-6ced1223fc1b20f6.js` (terdeteksi dinamis).
 
+---
+
+## 📌 Update v0.5.91 (Pola stabil — tanpa penyesuaian pola)
+
+### Konflik merge v0.5.91 yang diselesaikan
+1. `openai-responses.js`: upstream menambahkan `recordCompletedOutputItem()` /
+   `collectCompletedOutputItems()` (#4307 — response.completed kini membawa kembali
+   `output[]` items agar Copilot CLI & OpenAI SDK tidak menganggap turn kosong).
+   Definisi `toResponsesUsage` duplikat warisan HEAD dihapus (kini cukup satu di
+   atas file, dipakai via `state.responsesUsage`); pemanggilan lama
+   `const usage = toResponsesUsage(state.usage)` di `sendCompleted` dihapus
+   mengikuti master.
+2. Pola P1, P2, P3, P4, P6, P7 100% cocok tanpa perubahan; chunk theme store
+   berpindah ke `1321-a87b4fa8cd302a0f.js` (terdeteksi dinamis).
+   P5 tetap SKIP (native upstream).
+
+
 
 
