@@ -28,7 +28,7 @@ git -C "$env:USERPROFILE\9router-fork" pull origin patched
 
 # 1. Setelah 9router ter-update (npm update / npx 9router@latest), jalankan:
 node "$env:USERPROFILE\9router-fork\patches\apply-runtime-patches.mjs"
-#    → semua patch P1–P7 diterapkan + diverifikasi dalam satu perintah.
+#    → semua patch P1–P8 diterapkan + diverifikasi dalam satu perintah.
 
 # 2. Jika ada [FAIL]: pola minified berubah di versi baru → re-patch MANUAL
 #    sesuai section checklist yang dirujuk (2g/2i/2j/dll), lalu update pola
@@ -45,15 +45,32 @@ node "$env:USERPROFILE\9router-fork\patches\apply-runtime-patches.mjs"
 **Ringkas:** setelah tiap update 9router, cukup `git pull` fork + jalankan script
 di atas — selesai. Sisa langkah hanya jika muncul `[FAIL]`.
 
-**Cakupan script saat ini (divalidasi live terhadap build v0.5.69):**
+**Cakupan script saat ini (divalidasi live terhadap build v0.5.95):**
 P1 reasoning-only guard + envelope unwrap (kondisi **dan** body loop — jangan
 hanya salah satu!), P2 cancel-usage hook, P3+P4 view_image multimodal,
-P5 usage di `response.completed` (pemicu auto-compact Codex), P6+P7 tema Dracula.
+P6+P7 tema Dracula, P8 Qoder quota-112 (otomatis sejak v0.5.95 — sebelumnya
+manual di section 2b).
+P5 usage di `response.completed` = **retired** (diserap upstream sejak
+v0.5.86, `state.responsesUsage`; script otomatis SKIP). Vision trimmer juga
+sudah diserap upstream (`stripHistoryForContext` + `HEAD_KEEP`, budget-aware).
 
-**Di luar cakupan script (tetap manual/harness):** Qoder quota-112 (section 2b —
-penanganan 403 tersebar di banyak chunk, risiko salah patch tinggi), vision
-trimmer (section 2a), capabilities (section 2d), dan patch source-level lain
-yang butuh build ulang dari fork.
+**Di luar cakupan script (tetap manual/harness):** capabilities (section 2d)
+dan patch source-level lain yang butuh build ulang dari fork.
+
+---
+
+## 📌 Update v0.5.95
+
+- Merge upstream 0.5.95 → `patched` (1 konflik di `open-sse/utils/stream.js`:
+  fungsi `finalizeUsageTracking` [P2] vs `flushPendingCompletion` [upstream
+  watchdog] — keduanya dipertahankan, saling independen).
+- Pola P2 re-map untuk var map 0.5.95: finalizeStream `P` → `Q`
+  (provider/model/logger tetap `p`/`t`/`(0,j.s)`).
+- P8 (Qoder quota-112) pindah ke script: anchor unik
+  `!l)return{shouldFallback:!1,cooldownMs:0};` di chunk auth (4572.js pada
+  build 0.5.95), sisipan setelah early-return classifier — 403 selalu
+  shouldFallback:true dari classifier, jadi override di titik itu identik
+  dengan pengecekan pra-klasifikasi di source.
 
 ---
 
