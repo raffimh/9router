@@ -124,8 +124,12 @@ const patches = [
     isApplied: (c) => c.content.includes("_imgs.push({inlineData"),
     patterns: [
       {
-        from: 'let e=(0,i.pT)(c);null===e?e={result:c}:"object"!=typeof e&&(e={result:e}),a.push({functionResponse:{id:b,name:m(d),response:{result:e}}})}a.length>0&&g.contents.push({role:k.RV.USER,parts:a})',
-        to: 'let _imgs=[];if(Array.isArray(c)){let _txts=[];for(let _p of c){let _u=_p?.image_url?.url??_p?.image_url??_p?.url;if("string"==typeof _u&&_u.startsWith("data:")){let _idx=_u.indexOf(",");_idx!==-1&&_imgs.push({inlineData:{mime_type:_u.substring(5,_idx).split(";")[0],data:_u.substring(_idx+1)}})}else if(_p?.type==="text"&&"string"==typeof _p.text){_txts.push(_p.text)}else if("string"==typeof _p){_txts.push(_p)}else{_txts.push(JSON.stringify(_p))}}c=_txts.join("\\n")}let e=(0,i.pT)(c);null===e?e={result:c}:"object"!=typeof e&&(e={result:e}),a.push({functionResponse:{id:b,name:m(d),response:{result:e}}}),a.push(..._imgs)}a.length>0&&g.contents.push({role:k.RV.USER,parts:a})',
+        // v0.5.99 var map (chunk 8499.js, tool-result pairing loop after upstream
+        // #4273/#4532 rewrite): loop destructures {origId:b,emitId:c,name:d},
+        // queue vars e/f/g, resolved name h, pT result j, contents object j.
+        // Old (<=0.5.95): content=c, id=b, name=d, result=e, contents=g.
+        from: 'let j=(0,i.pT)(e);null===j?j={result:e}:"object"!=typeof j&&(j={result:j}),a.push({functionResponse:{id:c,name:m(h),response:{result:j}}})}a.length>0&&j.contents.push({role:k.RV.USER,parts:a})',
+        to: 'let _imgs=[];if(Array.isArray(e)){let _txts=[];for(let _p of e){let _u=_p?.image_url?.url??_p?.image_url??_p?.url;if("string"==typeof _u&&_u.startsWith("data:")){let _idx=_u.indexOf(",");_idx!==-1&&_imgs.push({inlineData:{mime_type:_u.substring(5,_idx).split(";")[0],data:_u.substring(_idx+1)}})}else if(_p?.type==="text"&&"string"==typeof _p.text){_txts.push(_p.text)}else if("string"==typeof _p){_txts.push(_p)}else{_txts.push(JSON.stringify(_p))}}e=_txts.join("\\n")}let j=(0,i.pT)(e);null===j?j={result:e}:"object"!=typeof j&&(j={result:j}),a.push({functionResponse:{id:c,name:m(h),response:{result:j}}}),a.push(..._imgs)}a.length>0&&j.contents.push({role:k.RV.USER,parts:a})',
         count: 1,
       },
     ],

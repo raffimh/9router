@@ -59,6 +59,21 @@ dan patch source-level lain yang butuh build ulang dari fork.
 
 ---
 
+## 📌 Update v0.5.99
+
+- Merge upstream 0.5.99 → `patched` (1 konflik di
+  `open-sse/translator/request/openai-to-gemini.js`: upstream menulis ulang
+  pairing functionCall/functionResponse untuk #4273/#4532 (uniquifier id +
+  queue per origId) — loop lama patch dinonaktifkan mengikuti upstream;
+  fix thinking-only (`normalizeGeminiContents` + `hasSubstantiveParts`)
+  dipertahankan dan masih terpakai).
+- Pola P4 re-map untuk var map 0.5.99 (chunk 8499.js): content `e`, id `c`,
+  name `h`, result `j`, contents `j` (sebelumnya `c`/`b`/`d`/`e`/`g`).
+- P8 (Qoder) anchor tetap cocok; chunk auth pindah 4572.js → 238.js di build
+  0.5.99 (find berbasis marker konten, jadi otomatis mengikuti).
+
+---
+
 ## 📌 Update v0.5.95
 
 - Merge upstream 0.5.95 → `patched` (1 konflik di `open-sse/utils/stream.js`:
