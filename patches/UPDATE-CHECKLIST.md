@@ -45,7 +45,7 @@ node "$env:USERPROFILE\9router-fork\patches\apply-runtime-patches.mjs"
 **Ringkas:** setelah tiap update 9router, cukup `git pull` fork + jalankan script
 di atas — selesai. Sisa langkah hanya jika muncul `[FAIL]`.
 
-**Cakupan script saat ini (divalidasi live terhadap build v0.5.95):**
+**Cakupan script saat ini (divalidasi live terhadap build v0.5.104):**
 P1 reasoning-only guard + envelope unwrap (kondisi **dan** body loop — jangan
 hanya salah satu!), P2 cancel-usage hook, P3+P4 view_image multimodal,
 P6+P7 tema Dracula, P8 Qoder quota-112 (otomatis sejak v0.5.95 — sebelumnya
@@ -53,9 +53,36 @@ manual di section 2b).
 P5 usage di `response.completed` = **retired** (diserap upstream sejak
 v0.5.86, `state.responsesUsage`; script otomatis SKIP). Vision trimmer juga
 sudah diserap upstream (`stripHistoryForContext` + `HEAD_KEEP`, budget-aware).
+Inti P4 always-pair functionResponse juga **retired sejak v0.5.104** (upstream
+queue/cursor `resp=""` #4273/#4532) — sisa cakupan P4 hanya injeksi inlineData.
 
 **Di luar cakupan script (tetap manual/harness):** capabilities (section 2d)
 dan patch source-level lain yang butuh build ulang dari fork.
+
+---
+
+## 📌 Update v0.5.104
+
+- Merge upstream 0.5.104 → `patched`: git auto-merge LOLOS tanpa konflik, tetapi
+  menghasilkan **2 hybrid rusak** di `open-sse/translator/request/openai-to-gemini.js`
+  (diperbaiki di commit "fix(translator): resolve v0.5.104 merge hybrids"):
+  1. **`normalizeGeminiContents` deklarasi ganda** — versi lokal lama fork (tanpa
+     terminal-turn guard & param `model`) lolos merge berdampingan dengan import
+     upstream dari `formats/gemini.js` → SyntaxError ESM + regresi diam-diam
+     (lokal shadowing import, guard terminal & gemini-4 tidak pernah jalan).
+  2. **Blok always-pair lama (P4 inti) tertinggal** — `Object.hasOwn(toolResponses, fid)`
+     + `let resp` deklarasi kedua memakai `fid` yang sudah tidak ada (upstream
+     me-refactor ke `{origId,emitId}` + queue/cursor dengan fallback `resp=""`
+     #4273/#4532) → SyntaxError (`let` ganda) + `fid is not defined`.
+  **Pelajaran BARU: auto-merge tanpa konflik ≠ aman.** Kedua sisi bisa ter-interleave
+  diam-diam. Setelah merge, WAJIB jalankan `node patches/regression-check.mjs`
+  (import ESM nyata — menangkap deklarasi ganda/nested export yang **lolos dari
+  `node --check`**, terbukti live di update ini).
+- Pola P4 re-map v0.5.99 → v0.5.104: hanya sanitize `m(h)` → `n(h)` (from & to).
+- `hasSubstantiveParts` (thinking-only drop) masih fork-only — upstream belum
+  menyerap; diverifikasi ulang pasca-merge (def + 2 pemakaian utuh).
+- Tool regresi baru: `patches/regression-check.mjs` (14 check, tanpa vitest;
+  otomatis buat junction `node_modules/@` → `src` untuk resolve alias `@/`).
 
 ---
 
@@ -431,6 +458,7 @@ npx 9router start
 | Qoder 112 | Cek chunk build mengandung string `Qoder quota exhausted` | String ditemukan |
 | Antigravity 403 | Cek log request dan host MITM setelah restart | Chat diarahkan ke host sandbox, tanpa `CONSUMER_INVALID` |
 | Antigravity pairing | Session panjang dengan banyak tool call (termasuk tool ber-output kosong) via `antigravity/gemini-*` | Tidak ada 400 INVALID_ARGUMENT permanen; `/compact` tidak lagi dibutuhkan |
+| Regression gate (source fork) | `node patches/regression-check.mjs` — WAJIB setelah merge upstream | `RESULT: ALL PASS — 14 passed, 0 failed` |
 | Capabilities vision/MiMo | `curl $NINEROUTER_URL/v1/models` → cek caps `sumopod/mimo-v2.5-pro` dan model `*deepseek*vision*` | mimo-v2.5-pro: `reasoning:true, vision:false`; deepseek-vision: `vision:true, reasoning:true` |
 | Cancel-usage | Jalankan sesi Codex via `antigravity/*` (pastikan log `DISCONNECT: ResponseAborted` muncul), lalu cek Usage/History di dashboard | Baris usage model antigravity **muncul** dengan token IN/OUT meski stream di-abort client |
 | Reasoning-only turn | Sesi Codex panjang via `antigravity/gemini-*`; kalau model kena quirk reasoning-only, log 9router menampilkan `reasoning-only turn ... replacing response.completed with response.failed` | Codex me-retry otomatis ("stream error; retrying") dan task **berlanjut**, tidak berhenti diam-diam |
