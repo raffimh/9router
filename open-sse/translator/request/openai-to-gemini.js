@@ -37,17 +37,6 @@ function sanitizeGeminiFunctionName(name) {
   return sanitized.substring(0, 64);
 }
 
-function normalizeGeminiContents(contents) {
-  const out = [];
-  for (const c of contents || []) {
-    if (!c?.role || !Array.isArray(c.parts) || c.parts.length === 0) continue;
-    const last = out.at(-1);
-    if (last?.role === c.role) last.parts.push(...c.parts);
-    else out.push({ ...c, parts: [...c.parts] });
-  }
-  return out;
-}
-
 // A MODEL content made only of thought parts (+ bare thoughtSignature filler)
 // is rejected by Antigravity with 400 INVALID_ARGUMENT. Such history entries
 // appear when a thinking turn was truncated before emitting any text or tool
@@ -91,6 +80,7 @@ function createToolCallIdUniquifier() {
     },
   };
 }
+
 // Core: Convert OpenAI request to Gemini format (base for all variants)
 function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG_SIGNATURE, sessionId = null) {
   const result = {
@@ -265,20 +255,6 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
                   name = origId;
                 }
               }
-
-              if (!Object.hasOwn(toolResponses, fid)) {
-                toolParts.push({
-                  functionResponse: {
-                    id: fid,
-                    name: sanitizeGeminiFunctionName(name),
-                    response: { result: "(no tool result returned)" }
-                  }
-                });
-                continue;
-              }
-
-              let resp = toolResponses[fid];
-              if (resp === null || resp === undefined) resp = "";
 
               // Multimodal tool result (e.g. Codex view_image): content is an array
               // holding image_url blocks. Emit the images as inlineData parts next to
