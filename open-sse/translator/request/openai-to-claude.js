@@ -197,44 +197,45 @@ Respond ONLY with the JSON object, no other text.`);
   return result;
 }
 
+// A tool message may carry an OpenAI content array (text + image_url parts).
+// Claude tool_result content accepts image blocks, but not OpenAI image_url parts.
+// Strings are passed through untouched.
+function convertToolResultContent(content) {
+  if (!Array.isArray(content)) return content;
+
+  const parts = [];
+  for (const part of content) {
+    if (part.type === OPENAI_BLOCK.TEXT && part.text) {
+      parts.push({ type: CLAUDE_BLOCK.TEXT, text: part.text });
+    } else if (part.type === OPENAI_BLOCK.IMAGE_URL && part.image_url && part.image_url.url) {
+      const url = part.image_url.url;
+      const parsed = parseDataUri(url);
+      if (parsed) {
+        parts.push({
+          type: CLAUDE_BLOCK.IMAGE,
+          source: { type: "base64", media_type: parsed.mimeType, data: parsed.base64 }
+        });
+      } else if (url.startsWith("http://") || url.startsWith("https://")) {
+        parts.push({ type: CLAUDE_BLOCK.IMAGE, source: { type: "url", url } });
+      }
+    } else if (part.type === CLAUDE_BLOCK.IMAGE && part.source) {
+      parts.push({ type: CLAUDE_BLOCK.IMAGE, source: part.source });
+    }
+  }
+
+  // Nothing convertible: keep the original payload rather than sending an empty result.
+  return parts.length > 0 ? parts : content;
+}
+
 // Get content blocks from single message
 function getContentBlocksFromMessage(msg, toolNameMap = new Map()) {
   const blocks = [];
 
   if (msg.role === ROLE.TOOL) {
-    // Multimodal tool results (e.g. Codex view_image after the responses→openai
-    // pivot): convert OpenAI-shaped blocks into valid Claude tool_result content.
-    // Passing image_url blocks through verbatim makes Anthropic-compatible APIs
-    // reject the whole request with 400.
-    let content = msg.content;
-    if (Array.isArray(content)) {
-      content = content
-        .map(part => {
-          if (part?.type === OPENAI_BLOCK.TEXT && typeof part.text === "string") {
-            return { type: CLAUDE_BLOCK.TEXT, text: part.text };
-          }
-          if (part?.type === OPENAI_BLOCK.IMAGE_URL) {
-            const url = part.image_url?.url ?? part.image_url;
-            const parsed = typeof url === "string" ? parseDataUri(url) : null;
-            if (parsed) {
-              return { type: CLAUDE_BLOCK.IMAGE, source: { type: "base64", media_type: parsed.mimeType, data: parsed.base64 } };
-            }
-            if (typeof url === "string" && (url.startsWith("http://") || url.startsWith("https://"))) {
-              return { type: CLAUDE_BLOCK.IMAGE, source: { type: "url", url } };
-            }
-            return { type: CLAUDE_BLOCK.TEXT, text: "[unsupported image]" };
-          }
-          if (part?.type === CLAUDE_BLOCK.TEXT || part?.type === CLAUDE_BLOCK.IMAGE) {
-            return part;
-          }
-          return typeof part === "string" ? { type: CLAUDE_BLOCK.TEXT, text: part } : { type: CLAUDE_BLOCK.TEXT, text: JSON.stringify(part) };
-        })
-        .filter(Boolean);
-    }
     blocks.push({
       type: CLAUDE_BLOCK.TOOL_RESULT,
       tool_use_id: msg.tool_call_id,
-      content
+      content: convertToolResultContent(msg.content)
     });
   } else if (msg.role === ROLE.USER) {
     if (typeof msg.content === "string") {
