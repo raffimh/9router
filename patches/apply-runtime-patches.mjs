@@ -195,6 +195,28 @@ const patches = [
     ],
     markers: ["Qoder quota exhausted [403/code 112]", '"qoder"===(0,h.rs)(e)'],
   },
+  {
+    id: "P9 capabilities: river deepseek-v4.1-flash vision:false (base64-as-text billing)",
+    checklist: "2k (new - P11 source parity)",
+    allChunks: true,
+    findMarker: '{pattern:"*deepseek-v4.*",caps:{vision:!0',
+    isApplied: (c) => c.content.includes('{pattern:"*deepseek-ai/deepseek-v4.1-flash*",caps:{vision:!1'),
+    patterns: [
+      {
+        // riverai bills embedded base64 images as TEXT (~500k tokens per
+        // screenshot). The river id "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+        // slips past the exact vision entries (prefix+suffix drift) and lands
+        // on *deepseek-v4.* (vision:true) - force vision:false so
+        // stripUnsupportedModalities + Vision Adapter engage. Scoped to the
+        // "deepseek-ai/" prefixed id family; other providers unaffected.
+        // Inserted BEFORE *deepseek-v4.* (first match wins).
+        from: '{pattern:"*deepseek-v4.*",caps:{vision:!0,reasoning:!0,thinkingFormat:"deepseek",thinkingEffortSupported:!0,contextWindow:1e6,maxOutput:128e3}}',
+        to: '{pattern:"*deepseek-ai/deepseek-v4.1-flash*",caps:{vision:!1,reasoning:!0,thinkingFormat:"deepseek",contextWindow:128e3,maxOutput:64e3}},{pattern:"*deepseek-v4.*",caps:{vision:!0,reasoning:!0,thinkingFormat:"deepseek",thinkingEffortSupported:!0,contextWindow:1e6,maxOutput:128e3}}',
+        count: 1,
+      },
+    ],
+    markers: ['{pattern:"*deepseek-ai/deepseek-v4.1-flash*",caps:{vision:!1'],
+  },
 ];
 
 function readAllIn(dir) {
@@ -229,6 +251,47 @@ for (const patch of patches) {
   try {
     if (patch.skip) {
       results.push({ id: patch.id, status: "SKIP", note: "superseded â€” no longer required" });
+      continue;
+    }
+    // allChunks: apply the same pattern set to EVERY chunk containing findMarker
+    // (capabilities tables are duplicated across several webpack chunks).
+    if (patch.allChunks) {
+      const jsChunks = fs.readdirSync(CHUNKS)
+        .filter((f) => f.endsWith(".js"))
+        .map((f) => ({ file: path.join(CHUNKS, f), name: f, content: fs.readFileSync(path.join(CHUNKS, f), "utf8") }))
+        .filter((x) => x.content.includes(patch.findMarker));
+      if (!jsChunks.length) {
+        results.push({ id: patch.id, status: "SKIP", note: "no chunk contains findMarker" });
+        continue;
+      }
+      for (const chunk of jsChunks) {
+        if (patch.isApplied(chunk)) {
+          results.push({ id: `${patch.id} [${chunk.name}]`, status: "ALREADY", note: "" });
+          continue;
+        }
+        if (verifyOnly) {
+          results.push({ id: `${patch.id} [${chunk.name}]`, status: "FAIL", note: "not applied (verify-only)" });
+          continue;
+        }
+        let ok = true;
+        for (const pat of patch.patterns) {
+          const count = chunk.content.split(pat.from).length - 1;
+          if (count !== pat.count) {
+            results.push({ id: `${patch.id} [${chunk.name}]`, status: "FAIL", note: `pattern mismatch (found ${count}, expected ${pat.count}) - see checklist ${patch.checklist}` });
+            ok = false;
+            break;
+          }
+        }
+        if (!ok) continue;
+        for (const pat of patch.patterns) chunk.content = chunk.content.replace(pat.from, pat.to);
+        save(chunk);
+        const missing = patch.markers.filter((m) => !chunk.content.includes(m));
+        if (missing.length) {
+          results.push({ id: `${patch.id} [${chunk.name}]`, status: "FAIL", note: `markers missing after apply: ${missing.join(", ")}` });
+          continue;
+        }
+        results.push({ id: `${patch.id} [${chunk.name}]`, status: "APPLIED", note: chunk.name });
+      }
       continue;
     }
     const chunk = patch.css ? null : (patch.loadName ? loadChunk(CHUNKS, patch.loadName) : patch.find());
