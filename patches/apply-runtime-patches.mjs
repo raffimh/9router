@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * apply-runtime-patches.mjs — Re-apply raffimh/9router `patched` fixes to the
+ * apply-runtime-patches.mjs â€” Re-apply raffimh/9router `patched` fixes to the
  * npm-installed build (.next-cli-build) after every upstream update.
  *
  * Usage:  node patches/apply-runtime-patches.mjs [--verify-only]
  *
  * Design rules (lessons from v0.5.59 TDZ + v0.5.65 accessor incidents):
- *  1. IDEMPOTENT — every patch checks isApplied() first and skips if present.
- *  2. EXACT-MATCH OR LOUD FAILURE — patterns are validated against a known
+ *  1. IDEMPOTENT â€” every patch checks isApplied() first and skips if present.
+ *  2. EXACT-MATCH OR LOUD FAILURE â€” patterns are validated against a known
  *     build (v0.5.69). If the minified shape changed upstream, the script
  *     FAILS that patch and tells you which checklist section to redo by hand.
  *     It NEVER silently half-patches.
- *  3. VERIFY GATE — after applying, runs node --check on every touched file
+ *  3. VERIFY GATE â€” after applying, runs node --check on every touched file
  *     and asserts every marker string is present.
  */
 
@@ -59,45 +59,47 @@ const patches = [
     checklist: "2g",
     find: () => readChunk(CHUNKS, "Error in flush"),
     isApplied: (c) =>
-      c.content.includes("(p.response?.candidates||p.candidates)?.[0]?.content?.parts)for(let a of (p.response?.candidates||p.candidates)[0].content.parts)") &&
+      c.content.includes("(q.response?.candidates||q.candidates)?.[0]?.content?.parts)for(let a of (q.response?.candidates||q.candidates)[0].content.parts)") &&
       c.content.includes("reasoning-only turn"),
-    // pristine v0.5.69 upstream shape → patched shape (condition AND body together;
+    // pristine v0.5.69 upstream shape â†’ patched shape (condition AND body together;
     // patching only the condition caused `Cannot read properties of undefined (reading '0')`).
-    // v0.5.69 var map: state=B→C, content=D→E, thinking=E→F, terminalSeen=K→L,
-    //                  doneSent=M→N, emitted=H→I, finalize=O→P
+    // v0.5.69 var map: state=Bâ†’C, content=Dâ†’E, thinking=Eâ†’F, terminalSeen=Kâ†’L,
+    //                  doneSent=Mâ†’N, emitted=Hâ†’I, finalize=Oâ†’P
     patterns: [
       {
-        from: 'p.candidates?.[0]?.content?.parts)for(let a of p.candidates[0].content.parts)',
-        to: '(p.response?.candidates||p.candidates)?.[0]?.content?.parts)for(let a of (p.response?.candidates||p.candidates)[0].content.parts)',
+        // v0.5.111: parsed chunk = q (was p in <= 0.5.104)
+        from: 'q.candidates?.[0]?.content?.parts)for(let a of q.candidates[0].content.parts)',
+        to: '(q.response?.candidates||q.candidates)?.[0]?.content?.parts)for(let a of (q.response?.candidates||q.candidates)[0].content.parts)',
         count: 1,
       },
       {
-        from: 'let w=(0,d.Y8)(c,o,p,C);if(w?._openaiIntermediate)',
-        to: 'let w=(0,d.Y8)(c,o,p,C),_gf=c===e.h.GEMINI||c===e.h.GEMINI_CLI||c===e.h.VERTEX||c===e.h.ANTIGRAVITY;if(w?._openaiIntermediate)',
+        from: 'let z=(0,d.Y8)(c,r,q,G);if(z?._openaiIntermediate)',
+        to: 'let z=(0,d.Y8)(c,r,q,G),_gf=c===e.h.GEMINI||c===e.h.GEMINI_CLI||c===e.h.VERTEX||c===e.h.ANTIGRAVITY;if(z?._openaiIntermediate)',
         count: 1,
       },
       {
-        from: 'if(w?.length>0)for(let a of w){if(null==a||!(0,h.c2)(a,o))continue;',
-        to: 'if(w?.length>0)for(let a of w){if(null==a||!(0,h.c2)(a,o))continue;if((o===e.h.OPENAI_RESPONSES||o===e.h.OPENAI)&&_gf&&!N&&(o===e.h.OPENAI_RESPONSES?(a?.event==="response.completed"||a?.type==="response.completed"||a?.data?.type==="response.completed"):!!a?.choices?.[0]?.finish_reason)&&0===E.length&&!(C?.geminiToolCallCount>0)&&F.length>0){(0,j.s)("SSE",`reasoning-only turn | format=${o} | thinking=${F.length} chars | replacing completion with retryable error`);if(o===e.h.OPENAI_RESPONSES){let a=(0,i.u9)();q?.appendConvertedChunk?.(a),f.enqueue(k.encode(a))}else{let a=\'data: {"error":{"message":"Reasoning-only turn completed without content; stream aborted for client retry","type":"stream_disconnected","code":"stream_disconnected"}}\\n\\n\';q?.appendConvertedChunk?.(a),f.enqueue(k.encode(a))}let b="data: [DONE]\\n\\n";q?.appendConvertedChunk?.(b),f.enqueue(k.encode(b)),L=!0,N=!0,I++;continue}',
+        // v0.5.111 var map: targetFormat=c, sourceFormat=r, content=I, thinking=J,
+        // state=G, doneSent=R, terminalSeen=Q, emitted=M, logger=(0,m.s),
+        // responses-fail=(0,l.u9), reqLogger=t, controller=f, encoder=n.
+        // TDZ: loop body shadows `b` and `c` â€” guard uses r/_gf only.
+        from: 'if(z?.length>0)for(let a of z){if(null==a||!(0,j.c2)(a,r))continue;',
+        to: 'if(z?.length>0)for(let a of z){if(null==a||!(0,j.c2)(a,r))continue;if((r===e.h.OPENAI_RESPONSES||r===e.h.OPENAI)&&_gf&&!R&&(r===e.h.OPENAI_RESPONSES?(a?.event==="response.completed"||a?.type==="response.completed"||a?.data?.type==="response.completed"):!!a?.choices?.[0]?.finish_reason)&&0===I.length&&!(G?.geminiToolCallCount>0)&&J.length>0){(0,m.s)("SSE",`reasoning-only turn | format=${r} | thinking=${J.length} chars | replacing completion with retryable error`);if(r===e.h.OPENAI_RESPONSES){let a=(0,l.u9)();t?.appendConvertedChunk?.(a),f.enqueue(n.encode(a))}else{let a=\'data: {"error":{"message":"Reasoning-only turn completed without content; stream aborted for client retry","type":"stream_disconnected","code":"stream_disconnected"}}\\n\\n\';t?.appendConvertedChunk?.(a),f.enqueue(n.encode(a))}let b="data: [DONE]\\n\\n";t?.appendConvertedChunk?.(b),f.enqueue(n.encode(b)),Q=!0,R=!0,M++;continue}',
         count: 1,
       },
     ],
-    markers: ["reasoning-only turn", '(p.response?.candidates||p.candidates)[0]'],
+    markers: ["reasoning-only turn", '(q.response?.candidates||q.candidates)[0]'],
   },
   {
     id: "P2 stream: cancel() usage finalization hook",
     checklist: "2f (chunk step)",
     find: () => readChunk(CHUNKS, "Error in flush"),
-    isApplied: (c) => c.content.includes('cancel(a){(0,j.s)("SSE"'),
+    isApplied: (c) => c.content.includes('cancel(a){(0,m.s)("SSE"'),
     patterns: [
       {
         // v0.5.95 var map (function n): provider=p, model=t, finalizeStream=Q,
-        // logger=(0,j.s) — j is a module import, not shadowed by n's params.
-        from: 'console.log("Error in flush:",a),Q()}}}',
-        // Braces = [catch][flush][object]; try/catch is a STATEMENT, so
-        // `,cancel` must go AFTER the flush-closing brace, never the catch's.
-        // v0.5.69 shape was identical with finalizeStream named P.
-        to: 'console.log("Error in flush:",a),Q()}},cancel(a){(0,j.s)("SSE",`cancel | provider=${p} | model=${t} | reason=${a?.message||a}`),Q()}}',
+        // logger=(0,j.s) â€” j is a module import, not shadowed by n's params.
+        from: 'console.log("Error in flush:",a),V()}}})}',
+        to: 'console.log("Error in flush:",a),V()}},cancel(a){(0,m.s)("SSE",`cancel | provider=${s} | model=${w} | reason=${a?.message||a}`),V()}})}',
         count: 1,
       },
     ],
@@ -106,7 +108,7 @@ const patches = [
   {
     id: "P3 translator: view_image multimodal (responses->openai tool output)",
     checklist: "2i",
-    loadName: "8499.js",
+    loadName: "2380.js",
     isApplied: (c) => c.content.includes('a.output.some(p=>p?.type==="input_image"'),
     patterns: [
       {
@@ -120,7 +122,7 @@ const patches = [
   {
     id: "P4 translator: view_image inlineData (openai->gemini tool result)",
     checklist: "2i",
-    loadName: "8499.js",
+    loadName: "2380.js",
     isApplied: (c) => c.content.includes("_imgs.push({inlineData"),
     patterns: [
       {
@@ -137,7 +139,7 @@ const patches = [
     markers: ["_imgs.push({inlineData"],
   },
   {
-    id: "P5 responses: embed usage in response.completed — SUPERSEDED upstream in v0.5.86 (commit da004655: state.responsesUsage)",
+    id: "P5 responses: embed usage in response.completed â€” SUPERSEDED upstream in v0.5.86 (commit da004655: state.responsesUsage)",
     checklist: "2e (native since v0.5.86)",
     skip: true,
     isApplied: () => true,
@@ -173,7 +175,7 @@ const patches = [
   },
   {
     id: "P8 auth: Qoder quota-112 connection disable",
-    checklist: "2b (manual → automated since v0.5.95)",
+    checklist: "2b (manual â†’ automated since v0.5.95)",
     find: () => readChunk(CHUNKS, "additional usage limit for your plan"),
     isApplied: (c) => c.content.includes("Qoder quota exhausted [403/code 112]"),
     patterns: [
@@ -226,7 +228,7 @@ function applyDraculaCss() {
 for (const patch of patches) {
   try {
     if (patch.skip) {
-      results.push({ id: patch.id, status: "SKIP", note: "superseded — no longer required" });
+      results.push({ id: patch.id, status: "SKIP", note: "superseded â€” no longer required" });
       continue;
     }
     const chunk = patch.css ? null : (patch.loadName ? loadChunk(CHUNKS, patch.loadName) : patch.find());
@@ -251,7 +253,7 @@ for (const patch of patches) {
     for (const pat of patch.patterns) {
       const count = chunk.content.split(pat.from).length - 1;
       if (count !== pat.count) {
-        results.push({ id: patch.id, status: "FAIL", note: `pattern mismatch (found ${count}, expected ${pat.count}) — manual re-patch required, see checklist ${patch.checklist}` });
+        results.push({ id: patch.id, status: "FAIL", note: `pattern mismatch (found ${count}, expected ${pat.count}) â€” manual re-patch required, see checklist ${patch.checklist}` });
         ok = false;
         break;
       }
@@ -285,7 +287,7 @@ for (const file of touched) {
 }
 
 console.log("=== apply-runtime-patches ===");
-for (const r of results) console.log(`[${r.status.padEnd(7)}] ${r.id}${r.note ? " — " + r.note : ""}`);
+for (const r of results) console.log(`[${r.status.padEnd(7)}] ${r.id}${r.note ? " â€” " + r.note : ""}`);
 const failed = results.some((r) => r.status === "FAIL");
-console.log(failed || !syntaxOk ? "\nRESULT: FAIL — do not use the build before fixing the FAILED patches." : "\nRESULT: OK — restart 9router, then hard-refresh browser (Ctrl+Shift+R) if CSS/theme chunks were patched.");
+console.log(failed || !syntaxOk ? "\nRESULT: FAIL â€” do not use the build before fixing the FAILED patches." : "\nRESULT: OK â€” restart 9router, then hard-refresh browser (Ctrl+Shift+R) if CSS/theme chunks were patched.");
 process.exit(failed || !syntaxOk ? 1 : 0);

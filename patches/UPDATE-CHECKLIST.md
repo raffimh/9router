@@ -1,4 +1,4 @@
-# 🔄 9router Update Checklist — Patch Collection (raffimh/9router)
+# ðŸ”„ 9router Update Checklist â€” Patch Collection (raffimh/9router)
 
 > **WAJIB DIBACA setiap kali 9router menerima update** (via `npm update`, `npx 9router@latest`, atau reinstall).
 >
@@ -7,154 +7,189 @@
 
 ---
 
-## ⚡ Prosedur Standar Setelah Update (WAJIB — urut)
+## âš¡ Prosedur Standar Setelah Update (WAJIB â€” urut)
 
 > Sejak v0.5.65, patch runtime build **TIDAK lagi di-apply manual satu per satu**.
-> Gunakan script otomatis — idempotent (aman dijalankan berulang), exact-match
+> Gunakan script otomatis â€” idempotent (aman dijalankan berulang), exact-match
 > atau GAGAL KERAS (tidak pernah half-patch), dan menjalankan gate verifikasi
 > (`node --check` semua file yang disentuh + assert marker string).
 
 **Sumber kebenaran script:** file `patches/apply-runtime-patches.mjs` di repo ini
-(branch `patched` — https://github.com/raffimh/9router). JANGAN bergantung pada
-salinan di folder temp — clone fork ke lokasi permanen sekali, lalu `git pull`
+(branch `patched` â€” https://github.com/raffimh/9router). JANGAN bergantung pada
+salinan di folder temp â€” clone fork ke lokasi permanen sekali, lalu `git pull`
 setiap kali akan memakainya:
 
 ```powershell
-# 0. Siapkan fork lokal PERMANEN (sekali saja) — jangan di folder Temp
+# 0. Siapkan fork lokal PERMANEN (sekali saja) â€” jangan di folder Temp
 git clone -b patched https://github.com/raffimh/9router.git "$env:USERPROFILE\9router-fork"
 
-# Setiap kali akan memakai script — sinkronkan dengan branch patched:
+# Setiap kali akan memakai script â€” sinkronkan dengan branch patched:
 git -C "$env:USERPROFILE\9router-fork" pull origin patched
 
 # 1. Setelah 9router ter-update (npm update / npx 9router@latest), jalankan:
 node "$env:USERPROFILE\9router-fork\patches\apply-runtime-patches.mjs"
-#    → semua patch P1–P8 diterapkan + diverifikasi dalam satu perintah.
+#    â†’ semua patch P1â€“P8 diterapkan + diverifikasi dalam satu perintah.
 
-# 2. Jika ada [FAIL]: pola minified berubah di versi baru → re-patch MANUAL
+# 2. Jika ada [FAIL]: pola minified berubah di versi baru â†’ re-patch MANUAL
 #    sesuai section checklist yang dirujuk (2g/2i/2j/dll), lalu update pola
 #    `from`/`to` di script agar next update otomatis lagi.
 #    Catat pelajaran baru di section Post-mortem (pola: insiden TDZ v0.5.59,
 #    insiden accessor v0.5.65).
 
-# 3. Jika RESULT: OK → restart 9router + smoke test 1 request streaming,
+# 3. Jika RESULT: OK â†’ restart 9router + smoke test 1 request streaming,
 #    lalu hard-refresh browser (Ctrl+Shift+R) jika chunk CSS/theme ter-patch.
 
 # 4. Commit + push perubahan (script + checklist) ke branch `patched`.
 ```
 
 **Ringkas:** setelah tiap update 9router, cukup `git pull` fork + jalankan script
-di atas — selesai. Sisa langkah hanya jika muncul `[FAIL]`.
+di atas â€” selesai. Sisa langkah hanya jika muncul `[FAIL]`.
 
-**Cakupan script saat ini (divalidasi live terhadap build v0.5.104):**
-P1 reasoning-only guard + envelope unwrap (kondisi **dan** body loop — jangan
+**Cakupan script saat ini (divalidasi live terhadap build v0.5.111):**
+P1 reasoning-only guard + envelope unwrap (kondisi **dan** body loop â€” jangan
 hanya salah satu!), P2 cancel-usage hook, P3+P4 view_image multimodal,
-P6+P7 tema Dracula, P8 Qoder quota-112 (otomatis sejak v0.5.95 — sebelumnya
+P6+P7 tema Dracula, P8 Qoder quota-112 (otomatis sejak v0.5.95 â€” sebelumnya
 manual di section 2b).
 P5 usage di `response.completed` = **retired** (diserap upstream sejak
 v0.5.86, `state.responsesUsage`; script otomatis SKIP). Vision trimmer juga
 sudah diserap upstream (`stripHistoryForContext` + `HEAD_KEEP`, budget-aware).
 Inti P4 always-pair functionResponse juga **retired sejak v0.5.104** (upstream
-queue/cursor `resp=""` #4273/#4532) — sisa cakupan P4 hanya injeksi inlineData.
+queue/cursor `resp=""` #4273/#4532) â€” sisa cakupan P4 hanya injeksi inlineData.
 
 **Di luar cakupan script (tetap manual/harness):** capabilities (section 2d)
 dan patch source-level lain yang butuh build ulang dari fork.
 
 ---
 
-## 📌 Update v0.5.104
+## ðŸ“Œ Update v0.5.111
 
-- Merge upstream 0.5.104 → `patched`: git auto-merge LOLOS tanpa konflik, tetapi
-  menghasilkan **2 hybrid rusak** di `open-sse/translator/request/openai-to-gemini.js`
-  (diperbaiki di commit "fix(translator): resolve v0.5.104 merge hybrids"):
-  1. **`normalizeGeminiContents` deklarasi ganda** — versi lokal lama fork (tanpa
-     terminal-turn guard & param `model`) lolos merge berdampingan dengan import
-     upstream dari `formats/gemini.js` → SyntaxError ESM + regresi diam-diam
-     (lokal shadowing import, guard terminal & gemini-4 tidak pernah jalan).
-  2. **Blok always-pair lama (P4 inti) tertinggal** — `Object.hasOwn(toolResponses, fid)`
-     + `let resp` deklarasi kedua memakai `fid` yang sudah tidak ada (upstream
-     me-refactor ke `{origId,emitId}` + queue/cursor dengan fallback `resp=""`
-     #4273/#4532) → SyntaxError (`let` ganda) + `fid is not defined`.
-  **Pelajaran BARU: auto-merge tanpa konflik ≠ aman.** Kedua sisi bisa ter-interleave
-  diam-diam. Setelah merge, WAJIB jalankan `node patches/regression-check.mjs`
-  (import ESM nyata — menangkap deklarasi ganda/nested export yang **lolos dari
-  `node --check`**, terbukti live di update ini).
-- Pola P4 re-map v0.5.99 → v0.5.104: hanya sanitize `m(h)` → `n(h)` (from & to).
-- `hasSubstantiveParts` (thinking-only drop) masih fork-only — upstream belum
-  menyerap; diverifikasi ulang pasca-merge (def + 2 pemakaian utuh).
-- Tool regresi baru: `patches/regression-check.mjs` (14 check, tanpa vitest;
-  otomatis buat junction `node_modules/@` → `src` untuk resolve alias `@/`).
+- Merge upstream 0.5.111 â†’ `patched` (2 konflik, keduanya diambil versi upstream
+  karena upstream kini mengimplementasikan fitur yang sama):
+  1. `openai-to-claude.js`: fork f8a45dcc (multimodal tool results) digantikan
+     upstream helper `convertToolResultContent()` (95009651) â€” cakupan setara
+     (text/image_url data:/http(s)/passthrough Claude parts + fallback
+     return-original bila tak ada yang convertible).
+  2. `testUtils.js`: UA probe Cloud Code kini via
+     `ANTIGRAVITY_CONFIG.loadCodeAssistUserAgent` (= `ANTIGRAVITY_IDE_USER_AGENT`
+     dari registry) â€” nilai identik dengan konstanta fork.
+- `stream.js` auto-merge LOLOS â€” diverifikasi TANPA hybrid: fitur baru upstream
+  (seenToolCallIds, liftAliases, restoreToolNames, toolNameMap param) hadir
+  bersama fix fork (finalizeUsageTracking + cancel hook + reasoning-only guard
+  + envelope unwrap) di file yang sama; regression-check 14/14 PASS.
+- **P1 re-map var map v0.5.111** (chunk 8895.js, module 71857): parsed=`q`,
+  content=`I`, thinking=`J`, state=`G`, terminalSeen=`Q`, doneSent=`R`,
+  emitted=`M`, items=`z`, sourceFormat=`r`, logger=`(0,m.s)`,
+  responses-fail=`(0,l.u9)` (module 30320 â†’ letter l, bukan i!).
+  âš ï¸ loop body men-shadow `b` dan `c` (`let c=(0,j.v8)(a,r)`) â€” guard memakai
+  `r`/`_gf` saja.
+- **P2: pelajaran BARU â€” ekstra `}` di tail to-string.** Pristine tail
+  `V()}}})}` = [catch}][flush}][obj}][)][fnq}]. Setelah insert `,cancel(a){...}`
+  tail yang benar adalah `}})` â€” to-string lama menyalin utuh `}}})}` sehingga
+  ada satu `}` ekstra â†’ `SyntaxError: missing ) after argument list`. Ditemukan
+  via bisect per-varian (minimal cancel pun broken â†’ insertion point salah,
+  bukan isi body). Varian dengan tail `}})` = SYNTAX OK.
+- **P3+P4: chunk translator pindah 8499.js â†’ 2380.js** (nama chunk berubah di
+  build 0.5.111; pola from/to P3+P4 TETAP cocok tanpa perubahan â€” hanya
+  loadName). P4's v0.5.104 pattern (sanitize `n(h)`) masih match.
+- P6/P7/P8: pola stabil, langsung ALREADY/APPLIED tanpa penyesuaian.
+- Chunk auth tetap 238.js (find berbasis marker konten).
 
 ---
 
-## 📌 Update v0.5.99
+## ðŸ“Œ Update v0.5.104
 
-- Merge upstream 0.5.99 → `patched` (1 konflik di
+- Merge upstream 0.5.104 â†’ `patched`: git auto-merge LOLOS tanpa konflik, tetapi
+  menghasilkan **2 hybrid rusak** di `open-sse/translator/request/openai-to-gemini.js`
+  (diperbaiki di commit "fix(translator): resolve v0.5.104 merge hybrids"):
+  1. **`normalizeGeminiContents` deklarasi ganda** â€” versi lokal lama fork (tanpa
+     terminal-turn guard & param `model`) lolos merge berdampingan dengan import
+     upstream dari `formats/gemini.js` â†’ SyntaxError ESM + regresi diam-diam
+     (lokal shadowing import, guard terminal & gemini-4 tidak pernah jalan).
+  2. **Blok always-pair lama (P4 inti) tertinggal** â€” `Object.hasOwn(toolResponses, fid)`
+     + `let resp` deklarasi kedua memakai `fid` yang sudah tidak ada (upstream
+     me-refactor ke `{origId,emitId}` + queue/cursor dengan fallback `resp=""`
+     #4273/#4532) â†’ SyntaxError (`let` ganda) + `fid is not defined`.
+  **Pelajaran BARU: auto-merge tanpa konflik â‰  aman.** Kedua sisi bisa ter-interleave
+  diam-diam. Setelah merge, WAJIB jalankan `node patches/regression-check.mjs`
+  (import ESM nyata â€” menangkap deklarasi ganda/nested export yang **lolos dari
+  `node --check`**, terbukti live di update ini).
+- Pola P4 re-map v0.5.99 â†’ v0.5.104: hanya sanitize `m(h)` â†’ `n(h)` (from & to).
+- `hasSubstantiveParts` (thinking-only drop) masih fork-only â€” upstream belum
+  menyerap; diverifikasi ulang pasca-merge (def + 2 pemakaian utuh).
+- Tool regresi baru: `patches/regression-check.mjs` (14 check, tanpa vitest;
+  otomatis buat junction `node_modules/@` â†’ `src` untuk resolve alias `@/`).
+
+---
+
+## ðŸ“Œ Update v0.5.99
+
+- Merge upstream 0.5.99 â†’ `patched` (1 konflik di
   `open-sse/translator/request/openai-to-gemini.js`: upstream menulis ulang
   pairing functionCall/functionResponse untuk #4273/#4532 (uniquifier id +
-  queue per origId) — loop lama patch dinonaktifkan mengikuti upstream;
+  queue per origId) â€” loop lama patch dinonaktifkan mengikuti upstream;
   fix thinking-only (`normalizeGeminiContents` + `hasSubstantiveParts`)
   dipertahankan dan masih terpakai).
 - Pola P4 re-map untuk var map 0.5.99 (chunk 8499.js): content `e`, id `c`,
   name `h`, result `j`, contents `j` (sebelumnya `c`/`b`/`d`/`e`/`g`).
-- P8 (Qoder) anchor tetap cocok; chunk auth pindah 4572.js → 238.js di build
+- P8 (Qoder) anchor tetap cocok; chunk auth pindah 4572.js â†’ 238.js di build
   0.5.99 (find berbasis marker konten, jadi otomatis mengikuti).
 
 ---
 
-## 📌 Update v0.5.95
+## ðŸ“Œ Update v0.5.95
 
-- Merge upstream 0.5.95 → `patched` (1 konflik di `open-sse/utils/stream.js`:
+- Merge upstream 0.5.95 â†’ `patched` (1 konflik di `open-sse/utils/stream.js`:
   fungsi `finalizeUsageTracking` [P2] vs `flushPendingCompletion` [upstream
-  watchdog] — keduanya dipertahankan, saling independen).
-- Pola P2 re-map untuk var map 0.5.95: finalizeStream `P` → `Q`
+  watchdog] â€” keduanya dipertahankan, saling independen).
+- Pola P2 re-map untuk var map 0.5.95: finalizeStream `P` â†’ `Q`
   (provider/model/logger tetap `p`/`t`/`(0,j.s)`).
 - P8 (Qoder quota-112) pindah ke script: anchor unik
   `!l)return{shouldFallback:!1,cooldownMs:0};` di chunk auth (4572.js pada
-  build 0.5.95), sisipan setelah early-return classifier — 403 selalu
+  build 0.5.95), sisipan setelah early-return classifier â€” 403 selalu
   shouldFallback:true dari classifier, jadi override di titik itu identik
   dengan pengecekan pra-klasifikasi di source.
 
 ---
 
 
-## 🩹 Patch yang dikelola di sini
+## ðŸ©¹ Patch yang dikelola di sini
 
 | # | Patch | Masalah | Status upstream (v0.5.55) |
 |---|---|---|---|
-| 1 | **Vision trimmer** (`capacityAdapter.js`) | History dipangkas `slice(0,6)` tanpa cek budget → model vision derail, menjawab topik lama | ❌ Masih bug |
-| 2 | **Qoder quota-112 disable** (`src/sse/services/auth.js`) | Qoder 403/code 112 (quota habis) hanya kena cooldown 2 menit → akun mati dipilih terus | ❌ Masih bug |
-| 3 | **Antigravity 403 fingerprint/host** (`open-sse/providers/shared.js`, MITM) | Host daily lama dan User-Agent `darwin/arm64` dapat ditolak Google, terutama di Windows | ❌ Masih bug |
-| 4 | **Antigravity dangling functionCall + thinking-only content** (`translator/request/openai-to-gemini.js`) | (a) Tool result kosong (`content:""`/`null`) atau tool call tanpa hasil → `functionCall` tanpa pasangan `functionResponse`; (b) Turn thinking yang terpotong (dikirim client sebagai `{content:"", reasoning_content}`) → content MODEL berisi hanya thought-part. Keduanya → Gemini **400 INVALID_ARGUMENT** permanen untuk session itu sampai `/compact` | ❌ Masih bug |
-| 5 | **Capabilities: deepseek-vision + Xiaomi MiMo** (`providers/capabilities.js`) | `deepseek-v4-flash-vision-exp` tidak kena vision (ditelan pattern `*deepseek-v4*` text-only). MiMo: semua varian LLM punya reasoning tapi tidak diset; `mimo-v2.5-pro` keliru dikasih vision (aslinya **text-only** — yang multimodal adalah `mimo-v2.5` base); varian TTS tanya tools/audio-out | ❌ Masih bug |
-| 6 | **Usage hilang saat client abort** (`open-sse/utils/stream.js`) | `onStreamComplete`/`saveUsageStats` hanya dipanggil di `flush()` transform stream. Codex menutup koneksi SSE begitu menerima `response.completed` (`DISCONNECT: ResponseAborted`) → `reader.cancel()`+`writer.abort()` melewati `flush()` → usage Antigravity/Gemini **tidak pernah tersimpan ke DB**, sementara provider cepat (glm) selesai normal lewat `flush()` dan tercatat | ❌ Masih bug |
-| 7 | **Turn reasoning-only menghentikan task diam-diam** (`open-sse/utils/stream.js`) | Gemini flash kadang stream thought parts lalu finish (STOP, **bukan** MAX_TOKENS) tanpa text/tool call. `response.completed` dengan output kosong → Codex menganggap turn sukses → `task_complete` + `last_agent_message: null` → task berhenti diam-diam di tengah pekerjaan. Terverifikasi live (session Codex 22:55, 178k ctx, 3288 token murni thinking). **Effort level tidak mempengaruhi** — quirk stokastik model, medium tetap bisa kena | ❌ Masih bug |
-| 8 | **Hang stream antigravity tidak retryable + deteksi lambat** (`streamHandler.js` + `streamingHandler.js` + `registry/antigravity.js`) | (a) `response.failed` sintetis (onAbortTerminal) hanya dipasang untuk Responses **passthrough** — jalur translate (codex→antigravity) saat stall/abort ditutup polos tanpa terminal event → Codex tidak retry; (b) watchdog stall tunggal 6 menit tidak membedakan koneksi hang (0 byte; TTFT sehat antigravity ~4 detik) vs silence thinking sah di tengah stream. Terverifikasi live: 0 byte selama 6 menit (IN 276k) → task mati | ❌ Masih bug |
-| 9 | **`response.completed` tanpa usage → Codex tidak pernah auto-compact** (`translator/response/openai-responses.js`) | Konverter openai→responses tidak menyertakan `response.usage` di `response.completed`. Codex membaca field ini untuk `token_count` (di session live semua `info:null`) dan pemicu auto-compaction. Tanpa itu context terus membengkak melewati window katalog (live: 297k dari 280k!), yang juga menaikkan probabilitas quirk reasoning-only gemini | ❌ Masih bug |
-| 10 | **Variasi Tema Dracula Dark Mode** (`globals.css` + `themeStore.js`) | Menambahkan palet warna resmi Dracula (Background `#282a36`, Current Line `#44475a`, Purple `#bd93f9`, Pink `#ff79c6`, Green `#50fa7b`, Yellow `#f1fa8c`, Cyan `#8be9fd`, Red `#ff5555`, Foreground `#f8f8f2`). Terintegrasi ke tombol theme toggle dan profile settings | 🚀 Fitur Baru |
+| 1 | **Vision trimmer** (`capacityAdapter.js`) | History dipangkas `slice(0,6)` tanpa cek budget â†’ model vision derail, menjawab topik lama | âŒ Masih bug |
+| 2 | **Qoder quota-112 disable** (`src/sse/services/auth.js`) | Qoder 403/code 112 (quota habis) hanya kena cooldown 2 menit â†’ akun mati dipilih terus | âŒ Masih bug |
+| 3 | **Antigravity 403 fingerprint/host** (`open-sse/providers/shared.js`, MITM) | Host daily lama dan User-Agent `darwin/arm64` dapat ditolak Google, terutama di Windows | âŒ Masih bug |
+| 4 | **Antigravity dangling functionCall + thinking-only content** (`translator/request/openai-to-gemini.js`) | (a) Tool result kosong (`content:""`/`null`) atau tool call tanpa hasil â†’ `functionCall` tanpa pasangan `functionResponse`; (b) Turn thinking yang terpotong (dikirim client sebagai `{content:"", reasoning_content}`) â†’ content MODEL berisi hanya thought-part. Keduanya â†’ Gemini **400 INVALID_ARGUMENT** permanen untuk session itu sampai `/compact` | âŒ Masih bug |
+| 5 | **Capabilities: deepseek-vision + Xiaomi MiMo** (`providers/capabilities.js`) | `deepseek-v4-flash-vision-exp` tidak kena vision (ditelan pattern `*deepseek-v4*` text-only). MiMo: semua varian LLM punya reasoning tapi tidak diset; `mimo-v2.5-pro` keliru dikasih vision (aslinya **text-only** â€” yang multimodal adalah `mimo-v2.5` base); varian TTS tanya tools/audio-out | âŒ Masih bug |
+| 6 | **Usage hilang saat client abort** (`open-sse/utils/stream.js`) | `onStreamComplete`/`saveUsageStats` hanya dipanggil di `flush()` transform stream. Codex menutup koneksi SSE begitu menerima `response.completed` (`DISCONNECT: ResponseAborted`) â†’ `reader.cancel()`+`writer.abort()` melewati `flush()` â†’ usage Antigravity/Gemini **tidak pernah tersimpan ke DB**, sementara provider cepat (glm) selesai normal lewat `flush()` dan tercatat | âŒ Masih bug |
+| 7 | **Turn reasoning-only menghentikan task diam-diam** (`open-sse/utils/stream.js`) | Gemini flash kadang stream thought parts lalu finish (STOP, **bukan** MAX_TOKENS) tanpa text/tool call. `response.completed` dengan output kosong â†’ Codex menganggap turn sukses â†’ `task_complete` + `last_agent_message: null` â†’ task berhenti diam-diam di tengah pekerjaan. Terverifikasi live (session Codex 22:55, 178k ctx, 3288 token murni thinking). **Effort level tidak mempengaruhi** â€” quirk stokastik model, medium tetap bisa kena | âŒ Masih bug |
+| 8 | **Hang stream antigravity tidak retryable + deteksi lambat** (`streamHandler.js` + `streamingHandler.js` + `registry/antigravity.js`) | (a) `response.failed` sintetis (onAbortTerminal) hanya dipasang untuk Responses **passthrough** â€” jalur translate (codexâ†’antigravity) saat stall/abort ditutup polos tanpa terminal event â†’ Codex tidak retry; (b) watchdog stall tunggal 6 menit tidak membedakan koneksi hang (0 byte; TTFT sehat antigravity ~4 detik) vs silence thinking sah di tengah stream. Terverifikasi live: 0 byte selama 6 menit (IN 276k) â†’ task mati | âŒ Masih bug |
+| 9 | **`response.completed` tanpa usage â†’ Codex tidak pernah auto-compact** (`translator/response/openai-responses.js`) | Konverter openaiâ†’responses tidak menyertakan `response.usage` di `response.completed`. Codex membaca field ini untuk `token_count` (di session live semua `info:null`) dan pemicu auto-compaction. Tanpa itu context terus membengkak melewati window katalog (live: 297k dari 280k!), yang juga menaikkan probabilitas quirk reasoning-only gemini | âŒ Masih bug |
+| 10 | **Variasi Tema Dracula Dark Mode** (`globals.css` + `themeStore.js`) | Menambahkan palet warna resmi Dracula (Background `#282a36`, Current Line `#44475a`, Purple `#bd93f9`, Pink `#ff79c6`, Green `#50fa7b`, Yellow `#f1fa8c`, Cyan `#8be9fd`, Red `#ff5555`, Foreground `#f8f8f2`). Terintegrasi ke tombol theme toggle dan profile settings | ðŸš€ Fitur Baru |
 
 Semua fix hidup di **satu branch integrasi: `patched`** di fork [`raffimh/9router`](https://github.com/raffimh/9router).
 
 ```
 master (= upstream v0.5.55, sync otomatis)
-└── patched  ← SATU branch untuk semua fix
-      ├── fix(capacityAdapter): keep full history (vision trimmer)
-      ├── docs(patches): file patch + checklist ini
-      ├── fix(auth): disable Qoder connection on quota exhaustion
-      ├── fix(antigravity): use sandbox host + platform-matched IDE fingerprint
-      ├── fix(antigravity): always pair functionCall with functionResponse
-      ├── fix(stream): finalize usage accounting in cancel() when client aborts SSE stream
-      └── fix(stream): replace terminal event on gemini-family reasoning-only turns
+â””â”€â”€ patched  â† SATU branch untuk semua fix
+      â”œâ”€â”€ fix(capacityAdapter): keep full history (vision trimmer)
+      â”œâ”€â”€ docs(patches): file patch + checklist ini
+      â”œâ”€â”€ fix(auth): disable Qoder connection on quota exhaustion
+      â”œâ”€â”€ fix(antigravity): use sandbox host + platform-matched IDE fingerprint
+      â”œâ”€â”€ fix(antigravity): always pair functionCall with functionResponse
+      â”œâ”€â”€ fix(stream): finalize usage accounting in cancel() when client aborts SSE stream
+      â””â”€â”€ fix(stream): replace terminal event on gemini-family reasoning-only turns
 ```
 
 > Catatan: ada juga commit "fix(stream): retryable stall failure + first-byte watchdog"
 > (patch #8) di branch yang sama.
 
-> 📌 Fix lama tidak akan hilang: semuanya commit permanen di `patched`.
+> ðŸ“Œ Fix lama tidak akan hilang: semuanya commit permanen di `patched`.
 > Fix baru di masa depan = tambah commit baru di branch yang sama.
 
 ---
 
-## 📋 Ringkasan cepat tiap update
+## ðŸ“‹ Ringkasan cepat tiap update
 
 | Langkah | Aksi | Waktu |
 |---|---|---|
@@ -166,16 +201,16 @@ master (= upstream v0.5.55, sync otomatis)
 
 ---
 
-## Langkah 1 — Cek: fix mana yang masih dibutuhkan?
+## Langkah 1 â€” Cek: fix mana yang masih dibutuhkan?
 
 ### 1a. Vision trimmer
 
 ```powershell
 $content = (Invoke-WebRequest "https://raw.githubusercontent.com/decolua/9router/main/open-sse/services/capacityAdapter.js" -UseBasicParsing).Content
 if ($content -match 'HEAD_KEEP') {
-    Write-Output "⚠️  Vision trimmer: BUG MASIH ADA → patch dibutuhkan"
+    Write-Output "âš ï¸  Vision trimmer: BUG MASIH ADA â†’ patch dibutuhkan"
 } else {
-    Write-Output "✅ Vision trimmer: upstream sudah fix → skip patch-nya"
+    Write-Output "âœ… Vision trimmer: upstream sudah fix â†’ skip patch-nya"
 }
 ```
 
@@ -186,9 +221,9 @@ Atau manual: buka `https://github.com/decolua/9router/blob/main/open-sse/service
 ```powershell
 $content = (Invoke-WebRequest "https://raw.githubusercontent.com/decolua/9router/main/src/sse/services/auth.js" -UseBasicParsing).Content
 if ($content -match 'isQoderQuotaExhausted|Qoder quota exhausted') {
-    Write-Output "✅ Qoder 112: upstream sudah fix → skip patch-nya"
+    Write-Output "âœ… Qoder 112: upstream sudah fix â†’ skip patch-nya"
 } else {
-    Write-Output "⚠️  Qoder 112: BUG MASIH ADA → patch dibutuhkan"
+    Write-Output "âš ï¸  Qoder 112: BUG MASIH ADA â†’ patch dibutuhkan"
 }
 ```
 
@@ -197,9 +232,9 @@ if ($content -match 'isQoderQuotaExhausted|Qoder quota exhausted') {
 ```powershell
 $content = (Invoke-WebRequest "https://raw.githubusercontent.com/decolua/9router/main/open-sse/translator/request/openai-to-gemini.js" -UseBasicParsing).Content
 if ($content -match 'hasActualResponses') {
-    Write-Output "⚠️  Antigravity pairing: BUG MASIH ADA → patch dibutuhkan"
+    Write-Output "âš ï¸  Antigravity pairing: BUG MASIH ADA â†’ patch dibutuhkan"
 } else {
-    Write-Output "✅ Antigravity pairing: upstream sudah fix → skip patch-nya"
+    Write-Output "âœ… Antigravity pairing: upstream sudah fix â†’ skip patch-nya"
 }
 ```
 
@@ -208,9 +243,9 @@ if ($content -match 'hasActualResponses') {
 ```powershell
 $content = (Invoke-WebRequest "https://raw.githubusercontent.com/decolua/9router/main/open-sse/providers/capabilities.js" -UseBasicParsing).Content
 if ($content -match '\*deepseek\*vision\*' -and $content -match '\*mimo\*v2\.5\*pro\*') {
-    Write-Output "✅ Capabilities vision/MiMo: upstream sudah fix → skip patch-nya"
+    Write-Output "âœ… Capabilities vision/MiMo: upstream sudah fix â†’ skip patch-nya"
 } else {
-    Write-Output "⚠️  Capabilities vision/MiMo: BUG MASIH ADA → patch dibutuhkan"
+    Write-Output "âš ï¸  Capabilities vision/MiMo: BUG MASIH ADA â†’ patch dibutuhkan"
 }
 ```
 
@@ -219,9 +254,9 @@ if ($content -match '\*deepseek\*vision\*' -and $content -match '\*mimo\*v2\.5\*
 ```powershell
 $content = (Invoke-WebRequest "https://raw.githubusercontent.com/decolua/9router/main/open-sse/utils/stream.js" -UseBasicParsing).Content
 if ($content -match 'finalizeUsageTracking') {
-    Write-Output "✅ Cancel-usage: upstream sudah fix → skip patch-nya"
+    Write-Output "âœ… Cancel-usage: upstream sudah fix â†’ skip patch-nya"
 } else {
-    Write-Output "⚠️  Cancel-usage: BUG MASIH ADA → patch dibutuhkan"
+    Write-Output "âš ï¸  Cancel-usage: BUG MASIH ADA â†’ patch dibutuhkan"
 }
 ```
 
@@ -230,31 +265,31 @@ if ($content -match 'finalizeUsageTracking') {
 ```powershell
 $content = (Invoke-WebRequest "https://raw.githubusercontent.com/decolua/9router/main/open-sse/utils/stream.js" -UseBasicParsing).Content
 if ($content -match 'reasoning-only turn') {
-    Write-Output "✅ Reasoning-only: upstream sudah fix → skip patch-nya"
+    Write-Output "âœ… Reasoning-only: upstream sudah fix â†’ skip patch-nya"
 } else {
-    Write-Output "⚠️  Reasoning-only: BUG MASIH ADA → patch dibutuhkan"
+    Write-Output "âš ï¸  Reasoning-only: BUG MASIH ADA â†’ patch dibutuhkan"
 }
 ```
 
 ---
 
-## Langkah 2 — Re-apply patch ke instalasi npm
+## Langkah 2 â€” Re-apply patch ke instalasi npm
 
-> ⚠️ Path `v24.13.1` di bawah sesuai versi Node saat ini. Kalau ganti versi Node,
+> âš ï¸ Path `v24.13.1` di bawah sesuai versi Node saat ini. Kalau ganti versi Node,
 > cari path aktif dengan:
 > ```powershell
 > (Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match '9router' } | Select-Object -First 1).CommandLine
 > ```
 
-### 2a. Vision trimmer → patch file build minified
+### 2a. Vision trimmer â†’ patch file build minified
 
 **Opsi A: Prompt ke agent harness** (paling gampang)
 
 Copy-paste ke opencode / Cline / harness lain:
 
 > Re-apply patch fix vision-trimmer 9router:
-> 1. Buka file `%LOCALAPPDATA%\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks\112.js` (nama chunk bisa berbeda tiap versi — cari file yang mengandung `l.slice(0,6)`).
-> 2. Ganti `l.slice(0,6)` → `l.slice()`. Kalau sudah `l.slice()` → berhenti (sudah aktif).
+> 1. Buka file `%LOCALAPPDATA%\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks\112.js` (nama chunk bisa berbeda tiap versi â€” cari file yang mengandung `l.slice(0,6)`).
+> 2. Ganti `l.slice(0,6)` â†’ `l.slice()`. Kalau sudah `l.slice()` â†’ berhenti (sudah aktif).
 > 3. Backup dulu file asli dengan suffix `.bak-<tanggal>` sebelum edit.
 > 4. Verifikasi: `l.slice(0,6)` harus 0 kemunculan di seluruh folder chunks, `l.slice()` tepat 1.
 > 5. Ingatkan saya restart 9router.
@@ -266,16 +301,16 @@ $dir = "$env:LOCALAPPDATA\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\
 $f = Get-ChildItem "$dir\*.js" -File | ForEach-Object {
     if ((Get-Content $_.FullName -Raw) -match 'l\.slice\(0,6\)') { $_.FullName }
 }
-if (-not $f) { Write-Output "✅ Vision patch sudah aktif (atau struktur berubah)"; return }
+if (-not $f) { Write-Output "âœ… Vision patch sudah aktif (atau struktur berubah)"; return }
 Copy-Item $f "$f.bak-$(Get-Date -Format yyyyMMdd-HHmmss)"
 $c = Get-Content $f -Raw -Encoding UTF8
 Set-Content $f ($c -replace 'l\.slice\(0,6\)', 'l.slice()') -Encoding UTF8 -NoNewline
-Write-Output "✅ Patched: $f"
+Write-Output "âœ… Patched: $f"
 ```
 
 File patch git-format juga tersedia: [`fix-vision-trimmer.patch`](./fix-vision-trimmer.patch)
 
-### 2b. Qoder quota-112 → patch file build minified
+### 2b. Qoder quota-112 â†’ patch file build minified
 
 Patch ini mengubah `src/sse/services/auth.js` (source). Di instalasi npm, kodenya
 ter-bundle di salah satu chunk. Cara re-apply paling aman: **prompt agent harness**,
@@ -283,15 +318,15 @@ karena nama chunk dan bentuk minified bisa berubah tiap versi:
 
 > Re-apply patch Qoder quota-112 disable ke build 9router:
 > 1. Di folder `%LOCALAPPDATA%\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks`, cari chunk yang mengandung fungsi `markAccountUnavailable` (atau penanganan error 403 provider). Backup file itu dulu.
-> 2. Tambahkan logika: jika provider = qoder DAN status = 403 DAN errorText mengandung `"code":"112"` → set koneksi `isActive:false`, `testStatus:"unavailable"`, dan return `shouldFallback:true, cooldownMs:0` (tanpa timed lock).
-> 3. Referensi implementasi source-level: https://github.com/raffimh/9router branch `patched`, commit "fix(auth): disable Qoder connection on quota exhaustion" — fungsi `isQoderQuotaExhausted` di `src/sse/services/auth.js`.
+> 2. Tambahkan logika: jika provider = qoder DAN status = 403 DAN errorText mengandung `"code":"112"` â†’ set koneksi `isActive:false`, `testStatus:"unavailable"`, dan return `shouldFallback:true, cooldownMs:0` (tanpa timed lock).
+> 3. Referensi implementasi source-level: https://github.com/raffimh/9router branch `patched`, commit "fix(auth): disable Qoder connection on quota exhaustion" â€” fungsi `isQoderQuotaExhausted` di `src/sse/services/auth.js`.
 > 4. Verifikasi: string `Qoder quota exhausted` muncul di chunk tersebut.
 
-> 💡 Alternatif lebih bersih: build 9router dari fork branch `patched`
+> ðŸ’¡ Alternatif lebih bersih: build 9router dari fork branch `patched`
 > (`npm install && npm run build`), sehingga semua fix langsung termasuk.
 > Lebih lama, tapi tidak perlu patch manual sama sekali.
 
-### 2c. Antigravity 403 → rebuild source dengan patch branch
+### 2c. Antigravity 403 â†’ rebuild source dengan patch branch
 
 Patch ini mengubah source-level routing Antigravity:
 
@@ -303,20 +338,20 @@ Patch ini mengubah source-level routing Antigravity:
 Build ulang dari branch `patched` agar perubahan masuk ke bundle. Jangan hanya mengganti
 file OAuth onboarding; jalur chat dan MITM juga harus ikut ter-build.
 
-### 2d. Antigravity dangling functionCall → patch build atau rebuild
+### 2d. Antigravity dangling functionCall â†’ patch build atau rebuild
 
 Fix ini mengubah logika konverter (bukan one-liner), jadi untuk instalasi npm
 gunakan **prompt agent harness** atau **build dari fork**:
 
 > Re-apply patch fix antigravity dangling-functionCall ke build 9router:
 > 1. Di folder `%LOCALAPPDATA%\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks`, cari chunk yang mengandung `hasActualResponses`. Backup file itu dulu.
-> 2. Referensi implementasi source-level: https://github.com/raffimh/9router branch `patched`, commit "fix(antigravity): always pair functionCall with functionResponse" — `open-sse/translator/request/openai-to-gemini.js`.
+> 2. Referensi implementasi source-level: https://github.com/raffimh/9router branch `patched`, commit "fix(antigravity): always pair functionCall with functionResponse" â€” `open-sse/translator/request/openai-to-gemini.js`.
 > 3. Perubahan inti: (a) keberadaan response dicek `fid in toolResponses` (bukan truthiness), (b) tool result `""`/`null` tetap menghasilkan `functionResponse` `{result:""}`, (c) tool call tanpa pesan hasil sama sekali mendapat `functionResponse` sintetis `"(no tool result returned)"`, (d) `args` JSON tak valid fallback `{}`.
 > 4. Verifikasi: string `no tool result returned` muncul di chunk tersebut.
 
-### 2e. Capabilities deepseek-vision / MiMo → patch file build minified
+### 2e. Capabilities deepseek-vision / MiMo â†’ patch file build minified
 
-Tabel pattern ada di **chunk `412.js` dan `6306.js`** (nama bisa berbeda — cari chunk
+Tabel pattern ada di **chunk `412.js` dan `6306.js`** (nama bisa berbeda â€” cari chunk
 yang mengandung `*mimo*v2.5*`). Backup dulu, lalu dua penggantian:
 
 > Re-apply patch capabilities deepseek-vision + MiMo ke build 9router:
@@ -326,21 +361,21 @@ yang mengandung `*mimo*v2.5*`). Backup dulu, lalu dua penggantian:
 > 4. `node --check` kedua file; verifikasi `*deepseek*vision*` dan `*mimo*v2.5*pro*` muncul.
 > 5. Referensi source: commit "fix(capabilities): correct deepseek-vision and Xiaomi MiMo patterns".
 
-### 2f. Usage saat client abort → patch build minified
+### 2f. Usage saat client abort â†’ patch build minified
 
 Fix mengubah `open-sse/utils/stream.js`: logika finalisasi usage dipindah ke helper
 `finalizeUsageTracking()` (guard sekali-jalan) yang dipanggil dari `flush()` DAN
 hook `cancel()` baru pada TransformStream. Di build npm, kodenya ada di **chunk
-`8895.js`** (nama bisa berbeda — cari chunk yang mengandung `Error in flush`).
+`8895.js`** (nama bisa berbeda â€” cari chunk yang mengandung `Error in flush`).
 
 > Re-apply patch fix cancel-usage ke build 9router:
 > 1. Cari chunk yang mengandung `Error in flush` di `.next-cli-build\server\chunks`. Backup (sudah ada `.bak-cancel-usage` untuk 8895.js v0.5.55).
-> 2. Referensi source: https://github.com/raffimh/9router branch `patched`, commit "fix(stream): finalize usage accounting in cancel() when client aborts SSE stream" — `open-sse/utils/stream.js` (helper `finalizeUsageTracking` + hook `cancel`).
-> 3. Perubahan inti minified (nama variabel bisa beda per versi): (a) deklarasikan `_sf=!1` + arrow `_fin` setelah deklarasi `streamDoneSent` — isi: `trackPendingRequest(...,!1)`, estimasi usage bila belum ada, `logUsage`/`appendRequestLog`, panggil `onStreamComplete(content/thinking, usage, ttft)`; (b) hapus pemanggilan `trackPendingRequest` dan blok log/onStreamComplete duplikat di kedua cabang `flush`; (c) tambahkan method `cancel(a){dbg(...),_fin()}` pada object literal TransformStream.
+> 2. Referensi source: https://github.com/raffimh/9router branch `patched`, commit "fix(stream): finalize usage accounting in cancel() when client aborts SSE stream" â€” `open-sse/utils/stream.js` (helper `finalizeUsageTracking` + hook `cancel`).
+> 3. Perubahan inti minified (nama variabel bisa beda per versi): (a) deklarasikan `_sf=!1` + arrow `_fin` setelah deklarasi `streamDoneSent` â€” isi: `trackPendingRequest(...,!1)`, estimasi usage bila belum ada, `logUsage`/`appendRequestLog`, panggil `onStreamComplete(content/thinking, usage, ttft)`; (b) hapus pemanggilan `trackPendingRequest` dan blok log/onStreamComplete duplikat di kedua cabang `flush`; (c) tambahkan method `cancel(a){dbg(...),_fin()}` pada object literal TransformStream.
 > 4. Verifikasi: `node --check <chunk>` lulus; string `Error in finalizeUsageTracking` dan `cancel | provider=` muncul di chunk.
 > 5. Regression test: `tests/unit/stream-cancel-usage.test.js` (4 test) di repo tests.
 
-### 2g. Turn reasoning-only → patch build minified
+### 2g. Turn reasoning-only â†’ patch build minified
 
 Fix mengubah `open-sse/utils/stream.js`: saat item terminal hendak
 di-emit pada stream gemini-family dan turn terbukti reasoning-only
@@ -361,15 +396,15 @@ dan guard reasoning-only tidak akan pernah terpicu!
 > 2. Referensi source: https://github.com/raffimh/9router branch `patched`, commit "fix(stream): extend reasoning-only turn protection to OpenAI-format clients (OpenCode)".
 > 3. Inti:
 >    (a) Di jalur akumulasi `p.candidates?.[0]?.content?.parts`, ubah menjadi `(p.response?.candidates||p.candidates)?.[0]?.content?.parts`.
->    (b) **hoist** ke scope fungsi (sebelum `return new TransformStream`): `const _gf = targetFormat∈{GEMINI,GEMINI_CLI,VERTEX,ANTIGRAVITY}`, `const _pv = provider`;
->    (c) di loop items translate-mode (setelah filter `hasValuableContent`, sebelum injeksi usage), guard: `(sourceFormat===OPENAI_RESPONSES || sourceFormat===OPENAI) && _gf && !streamDoneSent && (sourceFormat===OPENAI_RESPONSES ? item?.event==="response.completed" : !!item?.choices?.[0]?.finish_reason) && accumulatedContent.length===0 && !(state?.geminiToolCallCount>0) && accumulatedThinking.length>0` → enqueue synthetic failure (Responses) atau error chunk (OpenAI) + `data: [DONE]\n\n`, set `openAIResponsesTerminalSeen=streamDoneSent=true`, `continue`.
->    ⚠️ **PENTING (pelajaran v1 → ReferenceError TDZ live):** di dalam loop items minified, nama scope-luar TER-SHADOW oleh deklarasi lokal di akhir body (`let c=formatSSE(...)`, `let p=parsedLine`, dst). JANGAN mereferensikan `c`/`p` mentah di dalam loop — selalu hoist ke const baru di scope fungsi dulu. String `reasoning-only turn` harus direferensikan via nama hoisted.
->    ⚠️ **PENTING (pelajaran v0.5.65 → TypeError live):** saat mengubah accessor berkondisi (mis. `p.candidates?.[0]` → `(p.response?.candidates||p.candidates)?.[0]`), CEK BODY loop yang memakai accessor yang sama — di v0.5.65 kondisi `if` ter-unwrap tapi body loop masih `for(let a of p.candidates[0].content.parts)` → `Cannot read properties of undefined (reading '0')` di setiap request ber-envelope Antigravity → `failed to pipe response`. Ganti SEMUA kemunculan accessor tersebut di blok yang sama (kondisi + body), bukan hanya yang pertama ketemu.
-> 4. Verifikasi: `node --check` lulus; string `reasoning-only turn` muncul di chunk; **dan** pastikan tidak ada referensi `c`/`p` telanjang di dalam blok guard. ⚠️ **`node --check` TIDAK menangkap TDZ** (itu error runtime, bukan sintaks — terbukti live di v0.5.59: check lulus tapi `Cannot access 'c' before initialization` menghancurkan semua request streaming). Setelah patch chunk server, **WAJIB** restart 9router + 1 request streaming sebagai smoke test sebelum dipakai. Lihat post-mortem di bawah.
+>    (b) **hoist** ke scope fungsi (sebelum `return new TransformStream`): `const _gf = targetFormatâˆˆ{GEMINI,GEMINI_CLI,VERTEX,ANTIGRAVITY}`, `const _pv = provider`;
+>    (c) di loop items translate-mode (setelah filter `hasValuableContent`, sebelum injeksi usage), guard: `(sourceFormat===OPENAI_RESPONSES || sourceFormat===OPENAI) && _gf && !streamDoneSent && (sourceFormat===OPENAI_RESPONSES ? item?.event==="response.completed" : !!item?.choices?.[0]?.finish_reason) && accumulatedContent.length===0 && !(state?.geminiToolCallCount>0) && accumulatedThinking.length>0` â†’ enqueue synthetic failure (Responses) atau error chunk (OpenAI) + `data: [DONE]\n\n`, set `openAIResponsesTerminalSeen=streamDoneSent=true`, `continue`.
+>    âš ï¸ **PENTING (pelajaran v1 â†’ ReferenceError TDZ live):** di dalam loop items minified, nama scope-luar TER-SHADOW oleh deklarasi lokal di akhir body (`let c=formatSSE(...)`, `let p=parsedLine`, dst). JANGAN mereferensikan `c`/`p` mentah di dalam loop â€” selalu hoist ke const baru di scope fungsi dulu. String `reasoning-only turn` harus direferensikan via nama hoisted.
+>    âš ï¸ **PENTING (pelajaran v0.5.65 â†’ TypeError live):** saat mengubah accessor berkondisi (mis. `p.candidates?.[0]` â†’ `(p.response?.candidates||p.candidates)?.[0]`), CEK BODY loop yang memakai accessor yang sama â€” di v0.5.65 kondisi `if` ter-unwrap tapi body loop masih `for(let a of p.candidates[0].content.parts)` â†’ `Cannot read properties of undefined (reading '0')` di setiap request ber-envelope Antigravity â†’ `failed to pipe response`. Ganti SEMUA kemunculan accessor tersebut di blok yang sama (kondisi + body), bukan hanya yang pertama ketemu.
+> 4. Verifikasi: `node --check` lulus; string `reasoning-only turn` muncul di chunk; **dan** pastikan tidak ada referensi `c`/`p` telanjang di dalam blok guard. âš ï¸ **`node --check` TIDAK menangkap TDZ** (itu error runtime, bukan sintaks â€” terbukti live di v0.5.59: check lulus tapi `Cannot access 'c' before initialization` menghancurkan semua request streaming). Setelah patch chunk server, **WAJIB** restart 9router + 1 request streaming sebagai smoke test sebelum dipakai. Lihat post-mortem di bawah.
 > 5. Regression test: `tests/unit/reasoning-only-turn.test.js` (7 test termasuk OpenAI format & Antigravity envelope).
 
 
-### 2h. Stall retryable + first-byte watchdog → patch build minified
+### 2h. Stall retryable + first-byte watchdog â†’ patch build minified
 
 Fix mengubah 3 file: `open-sse/utils/streamHandler.js` (param `firstByteTimeoutMs`
 di `pipeWithDisconnect`; armStall memakai timeout pendek selama `chunkCount===0`),
@@ -378,39 +413,39 @@ klien Responses, bukan hanya passthrough; pass `PROVIDERS[provider]?.stallFirstB
 `open-sse/providers/registry/antigravity.js` (transport `stallFirstByteMs: 120000`).
 
 Di build npm:
-- **8895.js L4** (streamingHandler): kondisi `M=p===OPENAI_RESPONSES&&q===OPENAI_RESPONSES?j.Hr:null` → `M=p===OPENAI_RESPONSES?j.Hr:null`; tambah `_fb=PROVIDERS[b]?.stallFirstByteMs||null` dan pass sebagai arg ke-6 pipeWithDisconnect.
+- **8895.js L4** (streamingHandler): kondisi `M=p===OPENAI_RESPONSES&&q===OPENAI_RESPONSES?j.Hr:null` â†’ `M=p===OPENAI_RESPONSES?j.Hr:null`; tambah `_fb=PROVIDERS[b]?.stallFirstByteMs||null` dan pass sebagai arg ke-6 pipeWithDisconnect.
 - **8895.js L13** (pipeWithDisconnect): signature + `let _t=h`, armStall pakai `0===j&&_fb?_fb:h`.
-- **1901.js / 4953.js / 5285.js** (registry antigravity): sisip `stallFirstByteMs:12e4,` setelah `format:"antigravity",` (muncul di 3 chunk — patch semuanya).
+- **1901.js / 4953.js / 5285.js** (registry antigravity): sisip `stallFirstByteMs:12e4,` setelah `format:"antigravity",` (muncul di 3 chunk â€” patch semuanya).
 
-> ⚠️ TDZ/shadowing: pakai nama fresh (`_fb`,`_t`) — jangan referensikan `c`/`p` mentah di dalam fungsi minified.
+> âš ï¸ TDZ/shadowing: pakai nama fresh (`_fb`,`_t`) â€” jangan referensikan `c`/`p` mentah di dalam fungsi minified.
 > Verifikasi: `node --check` semua chunk; string `stallFirstByteMs` muncul di 8895 + 3 chunk registry.
 > Regression test: `tests/unit/stall-first-byte.test.js` (2 test).
 
-### 2i. Usage di response.completed → patch build minified
+### 2i. Usage di response.completed â†’ patch build minified
 
 Fix mengubah `open-sse/translator/response/openai-responses.js`: helper `toResponsesUsage`
-(konversi prompt_tokens/cached/reasoning → bentuk Responses) + `sendCompleted`
+(konversi prompt_tokens/cached/reasoning â†’ bentuk Responses) + `sendCompleted`
 menyertakan `usage` di `response.completed`; capture `chunk.usage` intermediate
 di entry streaming. Di build npm: **chunk `8499.js`** (cari fungsi yang meng-emit
-`response.completed` dengan `status:"completed",background:!1,error:null` —
+`response.completed` dengan `status:"completed",background:!1,error:null` â€”
 sendCompleted minified).
 
 > Re-apply patch usage-in-completed ke build 9router:
 > 1. Cari chunk yang mengandung `completedSent` (8499.js v0.5.55). Backup (`.bak-usage`).
 > 2. Referensi source: fork commit "fix(responses): embed usage in response.completed so clients track context".
 > 3. Inti: di sendCompleted, sebelum emit, baca `state.usage`; bila ada, konversi ke `{input_tokens, input_tokens_details:{cached_tokens}, output_tokens, output_tokens_details:{reasoning_tokens}, total_tokens}` dan spread ke object `response` (`..._ru?{usage:_ru}:{}`).
-> 4. Verifikasi: `node --check`; test end-to-end — event `token_count` Codex kini berisi info (bukan null), dan di context besar Codex otomatis memicu "compacting".
+> 4. Verifikasi: `node --check`; test end-to-end â€” event `token_count` Codex kini berisi info (bukan null), dan di context besar Codex otomatis memicu "compacting".
 > 5. Regression test: `tests/unit/reasoning-only-turn.test.js` (test "embeds token usage").
 
-### 2j. Tema Dracula → patch CSS bundles + chunk client (build npm)
+### 2j. Tema Dracula â†’ patch CSS bundles + chunk client (build npm)
 
 Dua target di `.next-cli-build`:
 
-**(1) CSS** — `app/.next-cli-build/static/css/*.css` (v0.5.59: 3 file; variabel tema
-asli hidup di file yang mengandung `.dark{` — di v0.5.59: `c74d311ac45a6a53.css`;
+**(1) CSS** â€” `app/.next-cli-build/static/css/*.css` (v0.5.59: 3 file; variabel tema
+asli hidup di file yang mengandung `.dark{` â€” di v0.5.59: `c74d311ac45a6a53.css`;
 file lain hanya berisi font). Append blok Dracula ke SEMUA file css.
 
-> ⚠️ **WAJIB pakai nama variabel asli app** — skema Tailwind v4 `--color-*`
+> âš ï¸ **WAJIB pakai nama variabel asli app** â€” skema Tailwind v4 `--color-*`
 > (`--color-bg`, `--color-surface-2`, `--color-text-main`, ...), BUKAN nama generik
 > (`--background`, `--surface`, ...). Blok dengan nama salah tidak error dan tidak
 > berpengaruh apa pun (terbukti live v0.5.59). Selalu turunkan nama dari blok
@@ -426,21 +461,21 @@ Blok yang benar (selector `.dark.dracula` = specificity 0,2,0 > `.dark` 0,1,0):
 .dark.dracula .bg-white\/10,.dark.dracula [class*="bg-white/10"],[data-theme="dracula"] .bg-white\/10,[data-theme="dracula"] [class*="bg-white/10"]{background-color:#343746!important}
 ```
 
-**(2) Chunk client theme store** — `app/.next-cli-build/static/chunks/` (cari chunk
+**(2) Chunk client theme store** â€” `app/.next-cli-build/static/chunks/` (cari chunk
 yang mengandung `toggleTheme`; v0.5.59: `1321-2a57edbbd554a357.js` = store [1
-kemunculan], `5497-*.js` = hook/konsumen [4 kemunculan] — yang di-patch CUKUP store).
+kemunculan], `5497-*.js` = hook/konsumen [4 kemunculan] â€” yang di-patch CUKUP store).
 Dua penggantian:
 
-- Fungsi `s(e)` (apply theme): tambahkan cabang dracula — `classList.add("dark","dracula")` + `setAttribute("data-theme","dracula")`; cabang dark/light membersihkan keduanya.
-- `toggleTheme` store: rotasi 3-state `light → dark → dracula → light` (bukan 2-state).
+- Fungsi `s(e)` (apply theme): tambahkan cabang dracula â€” `classList.add("dark","dracula")` + `setAttribute("data-theme","dracula")`; cabang dark/light membersihkan keduanya.
+- `toggleTheme` store: rotasi 3-state `light â†’ dark â†’ dracula â†’ light` (bukan 2-state).
 
 Verifikasi: string `--color-bg:#1e1f29` dan `data-theme` ada; **hard refresh browser
-(Ctrl+Shift+R)** — nama file chunk/css TIDAK berubah padahal isinya berubah, jadi
+(Ctrl+Shift+R)** â€” nama file chunk/css TIDAK berubah padahal isinya berubah, jadi
 browser bisa menyajikan cache lama tanpa hard refresh.
 
 ---
 
-## Langkah 3 — Restart 9router
+## Langkah 3 â€” Restart 9router
 
 ```powershell
 Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match '9router' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
@@ -450,7 +485,7 @@ npx 9router start
 
 ---
 
-## Langkah 4 — Verifikasi
+## Langkah 4 â€” Verifikasi
 
 | Fix | Cara cek | Hasil yang diharapkan |
 |---|---|---|
@@ -458,26 +493,26 @@ npx 9router start
 | Qoder 112 | Cek chunk build mengandung string `Qoder quota exhausted` | String ditemukan |
 | Antigravity 403 | Cek log request dan host MITM setelah restart | Chat diarahkan ke host sandbox, tanpa `CONSUMER_INVALID` |
 | Antigravity pairing | Session panjang dengan banyak tool call (termasuk tool ber-output kosong) via `antigravity/gemini-*` | Tidak ada 400 INVALID_ARGUMENT permanen; `/compact` tidak lagi dibutuhkan |
-| Regression gate (source fork) | `node patches/regression-check.mjs` — WAJIB setelah merge upstream | `RESULT: ALL PASS — 14 passed, 0 failed` |
-| Capabilities vision/MiMo | `curl $NINEROUTER_URL/v1/models` → cek caps `sumopod/mimo-v2.5-pro` dan model `*deepseek*vision*` | mimo-v2.5-pro: `reasoning:true, vision:false`; deepseek-vision: `vision:true, reasoning:true` |
+| Regression gate (source fork) | `node patches/regression-check.mjs` â€” WAJIB setelah merge upstream | `RESULT: ALL PASS â€” 14 passed, 0 failed` |
+| Capabilities vision/MiMo | `curl $NINEROUTER_URL/v1/models` â†’ cek caps `sumopod/mimo-v2.5-pro` dan model `*deepseek*vision*` | mimo-v2.5-pro: `reasoning:true, vision:false`; deepseek-vision: `vision:true, reasoning:true` |
 | Cancel-usage | Jalankan sesi Codex via `antigravity/*` (pastikan log `DISCONNECT: ResponseAborted` muncul), lalu cek Usage/History di dashboard | Baris usage model antigravity **muncul** dengan token IN/OUT meski stream di-abort client |
 | Reasoning-only turn | Sesi Codex panjang via `antigravity/gemini-*`; kalau model kena quirk reasoning-only, log 9router menampilkan `reasoning-only turn ... replacing response.completed with response.failed` | Codex me-retry otomatis ("stream error; retrying") dan task **berlanjut**, tidak berhenti diam-diam |
-| Stall retryable + first-byte | Stream antigravity hang (0 byte) → log `STALL TIMEOUT 120000ms | chunks=0`; stream stall di tengah tetap 360000ms | Hang terdeteksi 2 menit (bukan 6) dan Codex menerima `response.failed` → auto-retry |
-| Usage di response.completed | Session Codex via 9router: event `token_count` di rollout kini berisi info; pada context mendekati window, Codex otomatis memicu compaction ("compacting…") | `token_count.info` tidak lagi null; prompt token berhenti tumbuh tak terbatas |
+| Stall retryable + first-byte | Stream antigravity hang (0 byte) â†’ log `STALL TIMEOUT 120000ms | chunks=0`; stream stall di tengah tetap 360000ms | Hang terdeteksi 2 menit (bukan 6) dan Codex menerima `response.failed` â†’ auto-retry |
+| Usage di response.completed | Session Codex via 9router: event `token_count` di rollout kini berisi info; pada context mendekati window, Codex otomatis memicu compaction ("compactingâ€¦") | `token_count.info` tidak lagi null; prompt token berhenti tumbuh tak terbatas |
 
 ```powershell
 # Cek cepat di build
 Get-ChildItem "$env:LOCALAPPDATA\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks\*.js" -File | ForEach-Object {
     $c = Get-Content $_.FullName -Raw -Encoding UTF8
-    if ($c -match 'Qoder quota exhausted') { "✅ qoder-112 aktif di $($_.Name)" }
+    if ($c -match 'Qoder quota exhausted') { "âœ… qoder-112 aktif di $($_.Name)" }
 }
 $sisa = Get-ChildItem "$env:LOCALAPPDATA\nvm\v24.13.1\node_modules\9router\app\.next-cli-build\server\chunks\*.js" -File | Where-Object { (Get-Content $_.FullName -Raw) -match 'l\.slice\(0,6\)' }
-if (-not $sisa) { Write-Output "✅ vision-trimmer aktif" } else { Write-Output "❌ vision BELUM di-patch" }
+if (-not $sisa) { Write-Output "âœ… vision-trimmer aktif" } else { Write-Output "âŒ vision BELUM di-patch" }
 ```
 
 ---
 
-## Langkah 5 — (Opsional) Sync fork + rebase branch `patched`
+## Langkah 5 â€” (Opsional) Sync fork + rebase branch `patched`
 
 Supaya fork tetap rapi dan `patched` selalu di atas master terbaru:
 
@@ -489,7 +524,7 @@ git rebase origin/master
 git push --force-with-lease origin patched
 ```
 
-Kalau ada **konflik rebase** → artinya upstream mengubah kode di sekitar patch.
+Kalau ada **konflik rebase** â†’ artinya upstream mengubah kode di sekitar patch.
 Itu biasanya pertanda upstream sudah menangani bug-nya dengan cara lain;
 periksa dulu sebelum melanjutkan.
 
@@ -504,43 +539,43 @@ git push origin patched
 
 ---
 
-## 🧠 Penjelasan singkat tiap bug
+## ðŸ§  Penjelasan singkat tiap bug
 
 ### Vision trimmer
 `capacityAdapter.vision` memangkas history dengan `slice(0, 6)` **tanpa mengecek
 budget token dulu**. Ketika ada >6 pesan sebelum giliran terakhir, semua pesan tengah
-(termasuk tugas aktif) dibuang — model vision hanya melihat 6 pesan awal + ekor,
+(termasuk tugas aktif) dibuang â€” model vision hanya melihat 6 pesan awal + ekor,
 sehingga menjawab topik lama alih-alih tugas gambar.
-Fix: `slice(0,6)` → `slice()`; loop budget yang ada tetap memangkas hanya saat
+Fix: `slice(0,6)` â†’ `slice()`; loop budget yang ada tetap memangkas hanya saat
 history melebihi 80% context window model vision.
 
 ### Qoder quota-112
 Qoder melaporkan quota habis sebagai payload SSE ber-HTTP-200 dengan envelope
 pertama `statusCodeValue: 403` + body `"code":"112"`. Tanpa fix, auth service hanya
 memberi cooldown 2 menit, sehingga pool memilih akun mati itu terus-menerus.
-Fix: perlakukan 403+code-112 sebagai sinyal account-wide — nonaktifkan koneksi
+Fix: perlakukan 403+code-112 sebagai sinyal account-wide â€” nonaktifkan koneksi
 (`isActive=false`, `testStatus=unavailable`) dan fallback ke akun/model berikutnya.
 Hanya code 112 yang trigger; code 10605 (queue throttle) dan pricingUrl tetap
 transient di jalur cooldown biasa.
 
 ### Antigravity dangling functionCall + thinking-only content
-Dua bug konverter `openai→antigravity` yang sama-sama menghasilkan
-**400 INVALID_ARGUMENT deterministik** (payload-based → semua akun gagal,
+Dua bug konverter `openaiâ†’antigravity` yang sama-sama menghasilkan
+**400 INVALID_ARGUMENT deterministik** (payload-based â†’ semua akun gagal,
 glm fallback tidak terkena, `/compact` memulihkan karena menulis ulang history):
 
-**(a) Dangling functionCall** — keberadaan tool result dicek dengan
+**(a) Dangling functionCall** â€” keberadaan tool result dicek dengan
 **truthiness**; tool result `content:""`/`null` (bash tanpa stdout, tool batal)
-dianggap "tidak ada response" → `functionCall` terkirim tanpa `functionResponse`.
+dianggap "tidak ada response" â†’ `functionCall` terkirim tanpa `functionResponse`.
 Fix: selalu emit `functionResponse` per call (`Object.hasOwn` untuk cek
 keberadaan; placeholder `"(no tool result returned)"` bila hasil tak pernah
 dikirim; `args ?? {}` untuk argumen JSON invalid).
 
-**(b) Thinking-only content** — turn Gemini THINK:high yang terpotong
+**(b) Thinking-only content** â€” turn Gemini THINK:high yang terpotong
 (maxOutputTokens habis saat thinking, tanpa text/tool) dikirim ulang client
-sebagai `{content:"", reasoning_content}` → konverter membuat content MODEL
-yang HANYA berisi thought-part + signature-part kosong → ditolak Google.
-Terverifikasi live: reasoning-only → 400; reasoning+text → 200;
-reasoning+tool_calls → 200. Ini penyebab utama pola "session panjang →
+sebagai `{content:"", reasoning_content}` â†’ konverter membuat content MODEL
+yang HANYA berisi thought-part + signature-part kosong â†’ ditolak Google.
+Terverifikasi live: reasoning-only â†’ 400; reasoning+text â†’ 200;
+reasoning+tool_calls â†’ 200. Ini penyebab utama pola "session panjang â†’
 400 permanen": makin panjang session + THINK:high, makin besar peluang
 ada turn thinking-only di history.
 Fix: content assistant hanya dikirim bila punya minimal satu part
@@ -566,43 +601,43 @@ Regresi dijaga oleh `tests/unit/stream-cancel-usage.test.js` (4 test).
 
 ### Turn reasoning-only menghentikan task diam-diam
 Gemini flash (terverifikasi pada `gemini-3.7-flash-high`, context 178k) kadang
-stream thought parts lalu berhenti dengan `finishReason: STOP` — **bukan**
-MAX_TOKENS (jatah 64k baru terpakai 3288) — tanpa menghasilkan text atau tool
+stream thought parts lalu berhenti dengan `finishReason: STOP` â€” **bukan**
+MAX_TOKENS (jatah 64k baru terpakai 3288) â€” tanpa menghasilkan text atau tool
 call. `response.completed` dengan output kosong diperlakukan Codex sebagai
-turn sukses: `task_complete` + `last_agent_message: null` → task berhenti
+turn sukses: `task_complete` + `last_agent_message: null` â†’ task berhenti
 di tengah pekerjaan tanpa error. Effort/thinking level tidak menghilangkan
 quirk ini (hanya mengubah probabilitas).
-Fix: di stream gemini-family → openai-responses, bila terminal event hendak
+Fix: di stream gemini-family â†’ openai-responses, bila terminal event hendak
 terkirim dan turn terbukti reasoning-only, ganti dengan `response.failed`
 retryable (helper `formatIncompleteOpenAIResponsesStreamFailure`, kode
-`stream_disconnected`) + `[DONE]` → Codex me-retry request otomatis dan
+`stream_disconnected`) + `[DONE]` â†’ Codex me-retry request otomatis dan
 task berlanjut.
 
 Regresi dijaga oleh `tests/unit/reasoning-only-turn.test.js` (4 test).
 
 ---
 
-## 🗂️ Struktur branch fork
+## ðŸ—‚ï¸ Struktur branch fork
 
 | Branch | Isi | Status |
 |---|---|---|
-| `patched` | **Semua fix** (vision + qoder + antigravity 403 + antigravity pairing + capabilities + cancel-usage + reasoning-only + docs ini) | ✅ Branch kerja utama |
+| `patched` | **Semua fix** (vision + qoder + antigravity 403 + antigravity pairing + capabilities + cancel-usage + reasoning-only + docs ini) | âœ… Branch kerja utama |
 | `patch/fix-vision-trimmer` | Fix vision saja (calon PR ke upstream) | Referensi |
 | `fix-qoder-112-disable-account` | Fix qoder saja (calon PR ke upstream) | Referensi |
-| ~~`qoder-403-112-fallback`~~ | Dihapus — bagian SSE probe-nya sudah diserap upstream v0.5.55 | 🗑️ (arsip lokal: tag `archive/qoder-403-112-fallback`) |
+| ~~`qoder-403-112-fallback`~~ | Dihapus â€” bagian SSE probe-nya sudah diserap upstream v0.5.55 | ðŸ—‘ï¸ (arsip lokal: tag `archive/qoder-403-112-fallback`) |
 
 ---
 
-## 📁 File di folder ini
+## ðŸ“ File di folder ini
 
 | File | Fungsi |
 |---|---|
 | `fix-vision-trimmer.patch` | Patch git-format untuk build minified (vision trimmer) |
-| `UPDATE-CHECKLIST.md` | File ini — panduan wajib tiap update |
+| `UPDATE-CHECKLIST.md` | File ini â€” panduan wajib tiap update |
 
 ---
 
-## 🔔 Pengingat otomatis (opsional)
+## ðŸ”” Pengingat otomatis (opsional)
 
 1. **Bookmark file ini** di browser / editor.
 2. **Set reminder** tiap kali Anda update 9router.
@@ -611,15 +646,15 @@ Regresi dijaga oleh `tests/unit/reasoning-only-turn.test.js` (4 test).
 
 ---
 
-## ⚠️ Post-mortem patch v0.5.59 (2026-08-30) — pelajaran WAJIB
+## âš ï¸ Post-mortem patch v0.5.59 (2026-08-30) â€” pelajaran WAJIB
 
 Dua bug live saat re-apply patch ke build v0.5.59. Jangan diulang.
 
-### P1 — TDZ ReferenceError: `node --check` LULUS ≠ aman runtime
+### P1 â€” TDZ ReferenceError: `node --check` LULUS â‰  aman runtime
 
 Guard reasoning-only di 8895.js memasang referensi `c` (targetFormat) DI DALAM
-`for(let a of w){...}` — padahal di blok yang sama ada `let c=(0,h.v8)(a,o)` di
-bawahnya. Hoisting `let` membuat `c` ber-TDZ → `Cannot access 'c' before
+`for(let a of w){...}` â€” padahal di blok yang sama ada `let c=(0,h.v8)(a,o)` di
+bawahnya. Hoisting `let` membuat `c` ber-TDZ â†’ `Cannot access 'c' before
 initialization` di request streaming PERTAMA (semua request antigravity gagal,
 `failed to pipe response`). `node --check` tidak menangkap ini karena TDZ adalah
 error **runtime**, bukan sintaks.
@@ -627,7 +662,7 @@ error **runtime**, bukan sintaks.
 **Aturan:** setelah mem-patch chunk server, verifikasi berlapis:
 1. `node --check <chunk>` (sintaks),
 2. simulasi logika standalone (node -e) untuk kondisi guard,
-3. **restart 9router + 1 request streaming end-to-end** — baru dipakai.
+3. **restart 9router + 1 request streaming end-to-end** â€” baru dipakai.
 
 **Pola fix yang benar (v0.5.59):** pre-compute SEBELUM loop, di scope luar:
 ```js
@@ -635,36 +670,36 @@ let w=(0,d.Y8)(c,o,p,B),_gf=c===e.h.GEMINI||c===e.h.GEMINI_CLI||c===e.h.VERTEX||
 if(w?.length>0)for(let a of w){ ... _gf ... }   // JANGAN c===e.h.GEMINI di sini
 ```
 Log di dalam guard juga tidak boleh pakai `${p}`/`${t}` (sudah ter-shadow jadi
-parsed-chunk/event-name) — pakai nilai yang aman (`${o}`, `${E.length}`).
+parsed-chunk/event-name) â€” pakai nilai yang aman (`${o}`, `${E.length}`).
 
-### P2 — Ekspresi koma minified: `let A=...,B=...` adalah SATU statement
+### P2 â€” Ekspresi koma minified: `let A=...,B=...` adalah SATU statement
 
-- `let L=(function(){...})(),M=...,N=...` — menyisipkan `let _fb=...;` di tengah
+- `let L=(function(){...})(),M=...,N=...` â€” menyisipkan `let _fb=...;` di tengah
   rantai koma memutus sintaks. Perluas pakai koma: `...,_fb=h.xq[b]?.stallFirstByteMs||null,M=...`.
 - Rantai arrow `p=()=>{...},q={...}` dalam satu `let`: body arrow yang ditulis
-  ulang harus diakhiri TEPAT SATU `}` sebelum `,q=` — kelebihan `}` memindahkan
+  ulang harus diakhiri TEPAT SATU `}` sebelum `,q=` â€” kelebihan `}` memindahkan
   penutupan deklarasi dan memecah semua yang lain.
 - Rantai `if(A&&(...),B&&(...),C)for(...)` (urutan koma dalam satu if): mengganti
-  koma dengan `;` di tengah meninggalkan `if(` menggantung → tulis ulang seluruh
+  koma dengan `;` di tengah meninggalkan `if(` menggantung â†’ tulis ulang seluruh
   rantai sebagai statement `;` terpisah dan buang `if(`-nya.
 
-### P3 — Nama variabel CSS: ikut skema build, bukan skema sumber
+### P3 â€” Nama variabel CSS: ikut skema build, bukan skema sumber
 
 Tema Dracula v1 memakai nama generik (`--background`, `--surface`) padahal app
 build pakai skema Tailwind v4 `--color-*` (`--color-bg`, `--color-surface-2`,
-`--color-text-main`). Tidak ada error, tidak ada efek — bug diam. Selalu:
+`--color-text-main`). Tidak ada error, tidak ada efek â€” bug diam. Selalu:
 
 1. Ekstrak blok `:root{}` dan `.dark{}` dari CSS build target.
 2. Petakan 1:1 ke palet baru dengan NAMA YANG SAMA.
 3. Verifikasi cakupan otomatis: enumerasi var `:root`, pastikan semua (kecuali
    `--font-*`/`--radius*`) ada di blok baru.
 
-### P4 — Peta chunk v0.5.59 (referensi cepat update berikutnya)
+### P4 â€” Peta chunk v0.5.59 (referensi cepat update berikutnya)
 
 | Target patch | Chunk v0.5.59 | Anchor pencarian |
 |---|---|---|
-| Vision trimmer | `server/chunks/7807.js` | `l.slice(0,6)` → `o=l.slice(0,6)` minified |
-| Tool pairing (openai→antigravity) | `server/chunks/8499.js` | `functionResponse` + `.RV.MODEL` |
+| Vision trimmer | `server/chunks/7807.js` | `l.slice(0,6)` â†’ `o=l.slice(0,6)` minified |
+| Tool pairing (openaiâ†’antigravity) | `server/chunks/8499.js` | `functionResponse` + `.RV.MODEL` |
 | Usage di response.completed | `server/chunks/8499.js` | `completedSent` |
 | stream.js (translate/guard/candidates) | `server/chunks/8895.js` modul `71857` | `candidates`, `Error in flush` |
 | streamingHandler | `8895.js` L4 | `j.Hr:null,N=` |
@@ -674,17 +709,17 @@ build pakai skema Tailwind v4 `--color-*` (`--color-bg`, `--color-surface-2`,
 | CSS tema | `static/css/*.css` (3 file) | file yang mengandung `.dark{` |
 | Theme store | `static/chunks/1321-*.js` | `toggleTheme` (store=1, hook=4) |
 
-Nama chunk BERUBA tiap versi — selalu cari ulang via anchor, jangan hardcode.
+Nama chunk BERUBA tiap versi â€” selalu cari ulang via anchor, jangan hardcode.
 
-## ⚠️ Post-mortem patch v0.5.69 (2026-09-06) — pelajaran WAJIB
+## âš ï¸ Post-mortem patch v0.5.69 (2026-09-06) â€” pelajaran WAJIB
 
 Tiga kejadian saat re-apply patch ke build v0.5.69 (EBUSY + geser nama variabel
 minified + insiden koma setelah catch). Jangan diulang.
 
-### E1 — `npm error EBUSY` saat update: 9router masih berjalan
+### E1 â€” `npm error EBUSY` saat update: 9router masih berjalan
 
 `npm update -g 9router` gagal rename `node_modules\9router\app` (EBUSY) karena
-proses 9router masih hidup — termasuk proses yatim yang terminalnya sudah
+proses 9router masih hidup â€” termasuk proses yatim yang terminalnya sudah
 ditutup (`Get-CimInstance` menemukan PID yang parent-nya sudah mati). Windows
 mengunci file yang dimuat proses, npm tidak bisa me-rename foldernya.
 
@@ -694,12 +729,12 @@ Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
   Where-Object { $_.CommandLine -match '9router' } |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 ```
-Jangan andalkan "sudah Ctrl+C di terminal" — cek proses yatim via CommandLine.
+Jangan andalkan "sudah Ctrl+C di terminal" â€” cek proses yatim via CommandLine.
 
-### E2 — Peta variabel minified BERGESER (8895.js & 8499.js)
+### E2 â€” Peta variabel minified BERGESER (8895.js & 8499.js)
 
 Minifier menambah variabel closure baru di v0.5.69 sehingga SEMUA huruf setelah
-titik sisip bergeser satu huruf. Pemetaan v0.5.65 → v0.5.69 (8895.js):
+titik sisip bergeser satu huruf. Pemetaan v0.5.65 â†’ v0.5.69 (8895.js):
 
 | Makna | v0.5.65 | v0.5.69 |
 |---|---|---|
@@ -711,18 +746,18 @@ titik sisip bergeser satu huruf. Pemetaan v0.5.65 → v0.5.69 (8895.js):
 | sseEmittedCount | `H` | `I` |
 | finalizeStream | `O()` | `P()` |
 
-8499.js (tool result): `i[c]`→`l[c]`, `(0,h.pT)`→`(0,i.pT)`, `l(b)`→`m(b)`,
-`e.contents`→`g.contents`, `j.RV`→`k.RV`.
+8499.js (tool result): `i[c]`â†’`l[c]`, `(0,h.pT)`â†’`(0,i.pT)`, `l(b)`â†’`m(b)`,
+`e.contents`â†’`g.contents`, `j.RV`â†’`k.RV`.
 
 **Aturan:** JANGAN pernah asumsikan huruf variabel bertahan antar versi. Selalu
 grep anchor (`Error in flush`, `candidates`, `functionResponse`), baca konteks
-±300 char, petakan ulang variabelnya, baru tulis pola `from`/`to`.
+Â±300 char, petakan ulang variabelnya, baru tulis pola `from`/`to`.
 
-### E3 — `try/catch` adalah STATEMENT: koma setelah `}`-nya = SyntaxError
+### E3 â€” `try/catch` adalah STATEMENT: koma setelah `}`-nya = SyntaxError
 
-P2 cancel disisipkan sebagai `}catch(a){...P()},cancel(a){...}` →
+P2 cancel disisipkan sebagai `}catch(a){...P()},cancel(a){...}` â†’
 `Unexpected token ','`. Koma setelah blok catch tidak valid karena try/catch
-bukan expression — `}` pertama setelah body catch menutup CATCH, bukan flush.
+bukan expression â€” `}` pertama setelah body catch menutup CATCH, bukan flush.
 Struktur v0.5.69: `...P()}catch(a){...P()}}}` = [catch][flush][object].
 
 **Pola fix yang benar:** sisipkan `cancel` setelah brace penutup FLUSH:
@@ -730,15 +765,15 @@ Struktur v0.5.69: `...P()}catch(a){...P()}}}` = [catch][flush][object].
 from: '...P()}}}'                                    // [catch][flush][object]
 to:   '...P()}},cancel(a){...P()}}'                   // [catch][flush][cancel][object]
 ```
-`node --check` menangkap ini (sintaks), jadi gate verifikasi bekerja — build
+`node --check` menangkap ini (sintaks), jadi gate verifikasi bekerja â€” build
 tidak sempat dipakai rusak. Kombinasikan dengan bisect: reverse patch satu per
 satu untuk mengisolasi patch yang merusak.
 
 ---
 
-## 📌 Post-mortem v0.5.75 (P4 upstream structure shift & P7 var swap)
+## ðŸ“Œ Post-mortem v0.5.75 (P4 upstream structure shift & P7 var swap)
 
-### E4 — P4: Upstream menambahkan guard `n.some` dan merestruktur loop toolResponse
+### E4 â€” P4: Upstream menambahkan guard `n.some` dan merestruktur loop toolResponse
 Di v0.5.75, upstream menambahkan `if(n.some(a=>void 0!==l[a])||p){let a=[];for(let b of n){...}}`.
 Loop fid tidak lagi menggunakan iterator `c`, melainkan `b of n`, dan response adalah `c = l[b]`.
 Pola `from` P4 disederhanakan ke titik penargetan:
@@ -747,7 +782,7 @@ from: 'let e=(0,i.pT)(c);null===e?e={result:c}:"object"!=typeof e&&(e={result:e}
 ```
 sehingga tetap kompatibel dan menginjeksi inlineData gambar `_imgs` ke array `a`.
 
-### E5 — P7: Swap variabel minified `a` dan `i` pada theme store
+### E5 â€” P7: Swap variabel minified `a` dan `i` pada theme store
 Di v0.5.75 (chunk `1321-b7836dc184959aa5.js`), variabel `document.documentElement` dan `matchMedia` bertukar:
 `a=document.documentElement,i=window.matchMedia(...)` (sebelumnya `i=documentElement,a=matchMedia`).
 Begitu juga pada `toggleTheme`: `let i="dark"===a().theme?...` (sebelumnya `let a="dark"===i().theme?...`).
@@ -755,43 +790,43 @@ Pola `from`/`to` dan `isApplied` diupdate untuk merefleksikan penamaan baru.
 
 ---
 
-## 📌 Update v0.5.81 (Semua pola P1–P7 100% cocok)
-Di v0.5.81, seluruh pola minified P1–P7 stabil dan identik dengan perbaikan v0.5.75.
+## ðŸ“Œ Update v0.5.81 (Semua pola P1â€“P7 100% cocok)
+Di v0.5.81, seluruh pola minified P1â€“P7 stabil dan identik dengan perbaikan v0.5.75.
 Chunk theme store berpindah nama ke `1321-f85d28e9e6721ee8.js` dan terdeteksi dinamis secara otomatis oleh script `readChunk(ST_CHUNKS, "toggleTheme")`.
 Verifikasi `RESULT: OK` lolos tanpa penyesuaian pola tambahan.
 
 ---
 
-## 📌 Update v0.5.86 (P5 di-retire — diimplementasikan native oleh upstream)
+## ðŸ“Œ Update v0.5.86 (P5 di-retire â€” diimplementasikan native oleh upstream)
 
-### E6 — P5 resmi tidak dibutuhkan lagi
-Upstream v0.5.86 (commit `da004655` — "fix(responses): report usage on response.completed
+### E6 â€” P5 resmi tidak dibutuhkan lagi
+Upstream v0.5.86 (commit `da004655` â€” "fix(responses): report usage on response.completed
 so clients can auto-compact") mengimplementasikan fix yang identik dengan P5 secara native:
 konverter `openaiToOpenAIResponsesResponse` kini menyimpan `state.responsesUsage`
 (via `toResponsesUsage()`) dan `sendCompleted()` meng-embed `usage` ke payload
-`response.completed`. Pola pristine P5 sudah tidak ada di build → patch P5 di-retire
+`response.completed`. Pola pristine P5 sudah tidak ada di build â†’ patch P5 di-retire
 dari script dengan flag `skip: true` (status SKIP di output, bukan FAIL).
 
 ### Konflik merge v0.5.86 yang diselesaikan
-1. `capabilities.js` (blok MiMo): upstream merevisi semantik MiMo — SEMUA varian
+1. `capabilities.js` (blok MiMo): upstream merevisi semantik MiMo â€” SEMUA varian
    v2.5/v2.6 kini vision-capable (`<think>`-tag reasoning, always-on, thinkingFormat
    `deepseek`). Blok lama warisan patch "MiMo split" (v2.5-pro/v2-pro/v2-flash
    text-only + TTS 8k) dihapus mengikuti upstream; test lama ("MiMo v2.5 Pro as
    text-only", "MiMo v2 pro/flash", "MiMo TTS audio-out") dihapus dari
    `capabilities.test.js` karena digantikan describe block baru upstream.
 2. `openai-responses.js` (`sendCompleted`): HEAD memakai `...(usage ? { usage } : {})`
-   (bentuk P5 kita), master memakai `...(state.responsesUsage ? ...)` — diambil
+   (bentuk P5 kita), master memakai `...(state.responsesUsage ? ...)` â€” diambil
    versi master (native, lebih lengkap dengan detail cached/reasoning tokens).
 3. Pola P1, P2, P3, P4, P7 100% cocok tanpa perubahan; chunk theme store kini
    `1321-6ced1223fc1b20f6.js` (terdeteksi dinamis).
 
 ---
 
-## 📌 Update v0.5.91 (Pola stabil — tanpa penyesuaian pola)
+## ðŸ“Œ Update v0.5.91 (Pola stabil â€” tanpa penyesuaian pola)
 
 ### Konflik merge v0.5.91 yang diselesaikan
 1. `openai-responses.js`: upstream menambahkan `recordCompletedOutputItem()` /
-   `collectCompletedOutputItems()` (#4307 — response.completed kini membawa kembali
+   `collectCompletedOutputItems()` (#4307 â€” response.completed kini membawa kembali
    `output[]` items agar Copilot CLI & OpenAI SDK tidak menganggap turn kosong).
    Definisi `toResponsesUsage` duplikat warisan HEAD dihapus (kini cukup satu di
    atas file, dipakai via `state.responsesUsage`); pemanggilan lama
