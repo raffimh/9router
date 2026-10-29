@@ -61,6 +61,25 @@ dan patch source-level lain yang butuh build ulang dari fork.
 
 ---
 
+## 📌 Update v0.5.112
+
+- Merge upstream 0.5.112 → `patched`: bersih tanpa konflik, tanpa hybrid.
+  Upstream hanya menyentuh sanitasi schema Gemini (`flattenTypeArrays`
+  multi-type, `ensureArrayItems`, `enforceTypeConstraints` baru), entri
+  capabilities Claude 5.5 dotted / gpt-6.1-terra / PROVIDER github —
+  **tidak ada yang menyentuh pola deepseek (P9 aman) maupun area P1-P8**.
+- Var map minified 8895.js IDENTIK dengan v0.5.111 (finalize=V, provider=s,
+  model=w, logger=(0,m.s), parsed=q, content=I, thinking=J, doneSent=R) —
+  seluruh pola P1/P2 cocok tanpa re-map.
+- Chunk translator tetap 2380.js; chunk auth tetap 238.js.
+- Satu perbaikan kecil di script: marker verifikasi P2 tertinggal di huruf
+  logger lama (`(0,j.s)`) padahal to-string sudah `(0,m.s)` → marker
+  diperbarui; patch-nya sendiri benar sejak awal (hanya verifikasi yang
+  gagal, bukan apply).
+- Verifikasi pasca-merge: node --check 6 file kunci OK, marker fix fork
+  utuh, regression 14/14 PASS, P9 entry hadir di 3 chunk caps.
+
+---
 ## ðŸ“Œ Update v0.5.111
 
 - Merge upstream 0.5.111 â†’ `patched` (2 konflik, keduanya diambil versi upstream
