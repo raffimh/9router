@@ -25,6 +25,7 @@ export default function createOpenAIAdapter(providerId) {
         output_format,
       } = body;
       const full = { model, prompt, n, size, output_format };
+      if (cfg.defaultBody) Object.assign(full, cfg.defaultBody);
       if (quality) full.quality = quality;
       if (style) full.style = style;
       if (response_format) full.response_format = response_format;

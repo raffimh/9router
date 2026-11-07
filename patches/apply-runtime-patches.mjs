@@ -103,7 +103,7 @@ const patches = [
         count: 1,
       },
     ],
-    markers: ['cancel(a){(0,j.s)("SSE"'],
+    markers: ['cancel(a){(0,m.s)("SSE"'],
   },
   {
     id: "P3 translator: view_image multimodal (responses->openai tool output)",
@@ -172,6 +172,45 @@ const patches = [
       },
     ],
     markers: ['"dracula"===t'],
+  },
+  {
+    id: "P12a inferhub media provider: adapter + defaultBody (route.js)",
+    checklist: "2l (new)",
+    loadPath: process.env.LOCALAPPDATA + "/nvm/v24.13.1/node_modules/9router/app/.next-cli-build/server/app/api/v1/images/generations/route.js",
+    isApplied: (c) => c.content.includes('inferhub:(0,e.A)("inferhub")') && c.content.includes("if(b.defaultBody)Object.assign(k,b.defaultBody);"),
+    patterns: [
+      {
+        // ADAPTERS map: register the inferhub openai-compatible image adapter
+        from: 'sensenova:(0,e.A)("sensenova"),',
+        to: 'sensenova:(0,e.A)("sensenova"),inferhub:(0,e.A)("inferhub"),',
+        count: 1,
+      },
+      {
+        // openai adapter buildBody: merge imageConfig.defaultBody (complexity for
+        // river/inferhub codex-lane image models that reject the default "low")
+        from: 'k={model:a,prompt:d,n:e,size:f,output_format:j};',
+        to: 'k={model:a,prompt:d,n:e,size:f,output_format:j};if(b.defaultBody)Object.assign(k,b.defaultBody);',
+        count: 1,
+      },
+    ],
+    markers: ['inferhub:(0,e.A)("inferhub")', 'if(b.defaultBody)Object.assign(k,b.defaultBody);'],
+  },
+  {
+    id: "P12b inferhub media provider: registry entry (catalog chunks)",
+    checklist: "2l (new)",
+    allChunks: true,
+    findMarker: '{id:"recraft",priority:70',
+    isApplied: (c) => c.content.includes('{id:"inferhub",priority:70'),
+    patterns: [
+      {
+        // Inline registry entry (plain data — same shape as recraft) so the
+        // Text-to-Image dashboard card + PROVIDER_MEDIA config appear.
+        from: '{id:"recraft",priority:70,alias:"recraft",display:{name:"Recraft",icon:"image",color:"#EC4899",textIcon:"RC",website:"https://recraft.ai",notice:{apiKeyUrl:"https://www.recraft.ai/profile/api"}},category:"apikey",authType:"apikey",transport:null,models:[{id:"recraftv3",name:"Recraft V3",params:["n","size","style"],kind:"image"},{id:"recraftv2",name:"Recraft V2",params:["n","size","style"],kind:"image"}],serviceKinds:["image"],imageConfig:{baseUrl:"https://external.api.recraft.ai/v1/images/generations"}}',
+        to: '{id:"recraft",priority:70,alias:"recraft",display:{name:"Recraft",icon:"image",color:"#EC4899",textIcon:"RC",website:"https://recraft.ai",notice:{apiKeyUrl:"https://www.recraft.ai/profile/api"}},category:"apikey",authType:"apikey",transport:null,models:[{id:"recraftv3",name:"Recraft V3",params:["n","size","style"],kind:"image"},{id:"recraftv2",name:"Recraft V2",params:["n","size","style"],kind:"image"}],serviceKinds:["image"],imageConfig:{baseUrl:"https://external.api.recraft.ai/v1/images/generations"}},{id:"inferhub",priority:70,alias:"inferhub",display:{name:"Inferhub",icon:"image",color:"#6366F1",textIcon:"IH",website:"https://inferhub.dev",notice:{apiKeyUrl:"https://inferhub.dev"}},category:"apikey",authType:"apikey",transport:null,models:[{id:"cx/gpt-image-2-codex",name:"GPT Image 2 (Codex)",params:["n","size"],kind:"image"},{id:"gpt-image-2-codex",name:"GPT Image 2 Codex",params:["n","size"],kind:"image"}],serviceKinds:["image"],imageConfig:{baseUrl:"https://api.inferhub.dev/v1/images/generations",defaultBody:{complexity:"medium"}}}',
+        count: 1,
+      },
+    ],
+    markers: ['{id:"inferhub",priority:70'],
   },
   {
     id: "P8 auth: Qoder quota-112 connection disable",
@@ -294,7 +333,9 @@ for (const patch of patches) {
       }
       continue;
     }
-    const chunk = patch.css ? null : (patch.loadName ? loadChunk(CHUNKS, patch.loadName) : patch.find());
+    const chunk = patch.loadPath
+      ? { file: patch.loadPath, name: path.basename(patch.loadPath), content: fs.readFileSync(patch.loadPath, "utf8") }
+      : patch.css ? null : (patch.loadName ? loadChunk(CHUNKS, patch.loadName) : patch.find());
     if (!chunk && !patch.css) {
       results.push({ id: patch.id, status: "SKIP", note: "target chunk not found (marker missing)" });
       continue;

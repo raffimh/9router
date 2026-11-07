@@ -144,6 +144,7 @@ import p143 from "./gemini-web.js";
 import p144 from "./muse-web.js";
 import p146 from "./chatgpt-web.js";
 import p147 from "./veoaifree-web.js";
+import p76 from "./inferhub.js";
 import p151 from "./uc-web.js";
 import p152 from "./runcrate.js";
 import p153 from "./nace.js";
@@ -239,6 +240,7 @@ export default [
   p85,
   p86,
   p87,
+
   p88,
   p89,
   p90,
@@ -291,6 +293,7 @@ export default [
   p144,
   p146,
   p147,
+  p76,
   p151,
   p152,
   p153,
