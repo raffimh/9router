@@ -206,7 +206,7 @@ const patches = [
         // Inline registry entry (plain data — same shape as recraft) so the
         // Text-to-Image dashboard card + PROVIDER_MEDIA config appear.
         from: '{id:"recraft",priority:70,alias:"recraft",display:{name:"Recraft",icon:"image",color:"#EC4899",textIcon:"RC",website:"https://recraft.ai",notice:{apiKeyUrl:"https://www.recraft.ai/profile/api"}},category:"apikey",authType:"apikey",transport:null,models:[{id:"recraftv3",name:"Recraft V3",params:["n","size","style"],kind:"image"},{id:"recraftv2",name:"Recraft V2",params:["n","size","style"],kind:"image"}],serviceKinds:["image"],imageConfig:{baseUrl:"https://external.api.recraft.ai/v1/images/generations"}}',
-        to: '{id:"recraft",priority:70,alias:"recraft",display:{name:"Recraft",icon:"image",color:"#EC4899",textIcon:"RC",website:"https://recraft.ai",notice:{apiKeyUrl:"https://www.recraft.ai/profile/api"}},category:"apikey",authType:"apikey",transport:null,models:[{id:"recraftv3",name:"Recraft V3",params:["n","size","style"],kind:"image"},{id:"recraftv2",name:"Recraft V2",params:["n","size","style"],kind:"image"}],serviceKinds:["image"],imageConfig:{baseUrl:"https://external.api.recraft.ai/v1/images/generations"}},{id:"inferhub",priority:70,alias:"inferhub",display:{name:"Inferhub",icon:"image",color:"#6366F1",textIcon:"IH",website:"https://inferhub.dev",notice:{apiKeyUrl:"https://inferhub.dev"}},category:"apikey",authType:"apikey",transport:null,models:[{id:"cx/gpt-image-2-codex",name:"GPT Image 2 (Codex)",params:["n","size"],kind:"image"},{id:"gpt-image-2-codex",name:"GPT Image 2 Codex",params:["n","size"],kind:"image"}],serviceKinds:["image"],imageConfig:{baseUrl:"https://api.inferhub.dev/v1/images/generations",defaultBody:{complexity:"medium"}}}',
+        to: '{id:"recraft",priority:70,alias:"recraft",display:{name:"Recraft",icon:"image",color:"#EC4899",textIcon:"RC",website:"https://recraft.ai",notice:{apiKeyUrl:"https://www.recraft.ai/profile/api"}},category:"apikey",authType:"apikey",transport:null,models:[{id:"recraftv3",name:"Recraft V3",params:["n","size","style"],kind:"image"},{id:"recraftv2",name:"Recraft V2",params:["n","size","style"],kind:"image"}],serviceKinds:["image"],imageConfig:{baseUrl:"https://external.api.recraft.ai/v1/images/generations"}},{id:"inferhub",priority:70,alias:"inferhub",display:{name:"Inferhub",icon:"image",color:"#6366F1",textIcon:"IH",website:"https://inferhub.dev",notice:{apiKeyUrl:"https://inferhub.dev"}},category:"apikey",authType:"apikey",transport:null,models:[{id:"cx/gpt-image-2-codex",name:"GPT Image 2 (Codex)",params:["n","size"],kind:"image"},{id:"gpt-image-2-codex",name:"GPT Image 2 Codex",params:["n","size"],kind:"image"}],serviceKinds:["image"],imageConfig:{baseUrl:"https://api.inferhub.dev/v1/images/generations",authHeader:"bearer",defaultBody:{complexity:"medium"}}}',
         count: 1,
       },
     ],
@@ -297,11 +297,17 @@ for (const patch of patches) {
     if (patch.allChunks) {
       // scan BOTH server chunks and static (client) chunks — catalogs are
       // duplicated into the client bundle too (dashboard is a client component)
-      const jsChunks = [CHUNKS, ST_CHUNKS].flatMap((d) =>
-        fs.readdirSync(d)
-          .filter((f) => f.endsWith(".js"))
-          .map((f) => ({ file: path.join(d, f), name: f, content: fs.readFileSync(path.join(d, f), "utf8") }))
-      ).filter((x) => x.content.includes(patch.findMarker));
+      // scan the WHOLE build (server chunks + static/client chunks + compiled
+      // route files): catalogs and caps tables are duplicated in many places
+      const jsChunks = (function scan(d) {
+        let out = [];
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+          const p = path.join(d, e.name);
+          if (e.isDirectory()) out.push(...scan(p));
+          else if (e.name.endsWith(".js")) out.push({ file: p, name: p.replace(BASE + path.sep, ""), content: fs.readFileSync(p, "utf8") });
+        }
+        return out;
+      })(BASE).filter((x) => x.content.includes(patch.findMarker));
       if (!jsChunks.length) {
         results.push({ id: patch.id, status: "SKIP", note: "no chunk contains findMarker" });
         continue;

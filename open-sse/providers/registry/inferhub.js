@@ -22,6 +22,7 @@ export default {
   serviceKinds: ["image"],
   imageConfig: {
     baseUrl: "https://api.inferhub.dev/v1/images/generations",
+    authHeader: "bearer",
     // inferhub's codex-lane image model rejects the default complexity "low"
     // (400: "Complexity 'low' is not supported for this image model") — send
     // medium on every request (defaultBody is merged by the openai adapter).
