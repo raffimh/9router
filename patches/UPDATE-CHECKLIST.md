@@ -76,7 +76,14 @@ dan patch source-level lain yang butuh build ulang dari fork.
   logger lama (`(0,j.s)`) padahal to-string sudah `(0,m.s)` → marker
   diperbarui; patch-nya sendiri benar sejak awal (hanya verifikasi yang
   gagal, bukan apply).
-- Verifikasi pasca-merge: node --check 6 file kunci OK, marker fix fork
+- Verifikasi pasca-merge: node --check 6 file kunci OK, marker fix fork utuh, regression 14/14 PASS, P9 entry hadir di 3 chunk caps.
+- Pendalaman live (setelah restart): kartu Inferhub TIDAK muncul di dashboard
+  karena halaman Text-to-Image adalah CLIENT component - katalog provider
+  terduplikasi ke bundle client (`static/chunks/1321-*.js`) dan tabel caps
+  client (`static/chunks/5497-*.js`). Runner allChunks kini memindai
+  CHUNKS + ST_CHUNKS berdua; P12b + P9 ter-apply ke salinan client.
+  WAJIB hard-refresh browser (Ctrl+Shift+R) - nama file chunk tidak berubah
+  padahal isi berubah, browser cache menyajikan versi lama., marker fix fork
   utuh, regression 14/14 PASS, P9 entry hadir di 3 chunk caps.
 
 ---
