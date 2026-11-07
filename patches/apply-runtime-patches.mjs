@@ -295,10 +295,13 @@ for (const patch of patches) {
     // allChunks: apply the same pattern set to EVERY chunk containing findMarker
     // (capabilities tables are duplicated across several webpack chunks).
     if (patch.allChunks) {
-      const jsChunks = fs.readdirSync(CHUNKS)
-        .filter((f) => f.endsWith(".js"))
-        .map((f) => ({ file: path.join(CHUNKS, f), name: f, content: fs.readFileSync(path.join(CHUNKS, f), "utf8") }))
-        .filter((x) => x.content.includes(patch.findMarker));
+      // scan BOTH server chunks and static (client) chunks — catalogs are
+      // duplicated into the client bundle too (dashboard is a client component)
+      const jsChunks = [CHUNKS, ST_CHUNKS].flatMap((d) =>
+        fs.readdirSync(d)
+          .filter((f) => f.endsWith(".js"))
+          .map((f) => ({ file: path.join(d, f), name: f, content: fs.readFileSync(path.join(d, f), "utf8") }))
+      ).filter((x) => x.content.includes(patch.findMarker));
       if (!jsChunks.length) {
         results.push({ id: patch.id, status: "SKIP", note: "no chunk contains findMarker" });
         continue;
