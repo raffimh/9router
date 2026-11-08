@@ -89,6 +89,16 @@ dan patch source-level lain yang butuh build ulang dari fork.
   di-rename `inferhub-image`. ATURAN: id provider media JANGAN pakai nama
   yang mungkin sama dengan nama koneksi custom user (selalu tambahkan
   suffix -image/-media).
+- PELAJARAN PALING KRITIS (Internal Server Error setelah update): menghapus
+  entry registry yang ter-insert TANPA menyertakan KOMA TRAILINGNYA
+  meninggalkan lubang sparse array (`}},,{...}` -> dua koma berurutan).
+  `for (const entry of REGISTRY)` mengiterasi lubang sebagai undefined ->
+  `entry.transport` meledak saat loading instrumentation hook ->
+  Internal Server Error di SEMUA request. node --check TETAP LOLOS
+  (elisi array adalah sintaks valid!). FIX: `}},{,{id:` -> `}},{id:`.
+  ATURAN: menghapus entry yang di-insert harus menyertakan koma trailing
+  (hitung `,` di antara entry), dan VERIFIKASI RUNTIME via instance
+  ter-detach + GET / dan /api/v1/models, bukan hanya node --check.
   WAJIB hard-refresh browser (Ctrl+Shift+R) - nama file chunk tidak berubah
   padahal isi berubah, browser cache menyajikan versi lama., marker fix fork
   utuh, regression 14/14 PASS, P9 entry hadir di 3 chunk caps.
