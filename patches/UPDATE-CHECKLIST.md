@@ -61,6 +61,25 @@ dan patch source-level lain yang butuh build ulang dari fork.
 
 ---
 
+## 📌 Update v0.5.116 (2026-11-08)
+
+- Merge bersih (tanpa konflik) dari upstream 1339107e; commit merge 6c904de8.
+- Semua runtime patch P1–P4, P6–P9, P12a/P12b APPLIED tanpa perubahan script -
+  semua marker masih cocok di build baru. Nama chunk berubah (8895 utk P1/P2,
+  238 utk P8, hash 1321-93eb*/5497-8707* utk client) tapi runner marker-based
+  jadi tidak terpengaruh.
+- Regression 14/14 PASS. Verifikasi runtime: instance diagnostik ter-detach
+  port 20129 - startup bersih, GET /api/v1/models 200, GET / 307 (normal),
+  diag dimatikan. Scan build-wide: 0 lubang sparse array, 0 entry bare
+  'inferhub' (collision-safe), 4 entry inferhub-image (3 chunk server +
+  client 1321), 1 registrasi ADAPTERS di route.js.
+- Perubahan upstream relevan: Gemini kirim MIME konkret utk gambar remote
+  (bukan image/*); Translator simpan SEMUA Gemini tool results (#2393);
+  thinking config dipertahankan di OpenAI tool-result turns; Codex Image
+  drop reasoning.effort + GPT Image 2.6 models; claude transport tahan
+  jaringan DPI-shaped (undici 8/happy-eyeballs); deepseek-pow-hash.js
+  di-ship di samping PoW worker.
+
 ## 📌 Update v0.5.112
 
 - Merge upstream 0.5.112 → `patched`: bersih tanpa konflik, tanpa hybrid.
