@@ -79,6 +79,21 @@ dan patch source-level lain yang butuh build ulang dari fork.
   drop reasoning.effort + GPT Image 2.6 models; claude transport tahan
   jaringan DPI-shaped (undici 8/happy-eyeballs); deepseek-pow-hash.js
   di-ship di samping PoW worker.
+- INSIDEN 9 Nov (combo inferhub/* jatuh ke provider image, 401 ke
+  api.openai.com): to-string P12b ternyata masih memuat
+  `alias:"inferhub"` (rename kemarin hanya mengubah `id` di to-string;
+  field alias terlewat). Build fresh v0.5.116 memasukkan entry dengan
+  alias lama itu -> ALIAS_TO_PROVIDER_ID['inferhub']='inferhub-image'
+  -> prefix koneksi custom ('inferhub' di providerNodes.prefix) dianggap
+  RESERVED_PROVIDER_PREFIXES -> lookup node DILEWATI -> semua model
+  inferhub/* di-route ke provider image (transport null -> fallback
+  api.openai.com) -> 401 sk-airo key. FIX: alias:"inferhub-image" di
+  4 file build + to-string script; isApplied kini mengecek id DAN alias.
+  PELAJARAN: rename id/alias harus mengubah SEMUA kemunculan di to-string
+  (bukan hanya fragment {id:), dan isApplied harus memverifikasi field
+  kunci lengkap (id+alias), bukan prefix saja. Verifikasi runtime
+  wajib mengetes jalur end-to-end (POST dengan model prefix user),
+  bukan hanya GET /api/v1/models.
 
 ## 📌 Update v0.5.112
 
