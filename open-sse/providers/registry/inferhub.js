@@ -1,7 +1,7 @@
 export default {
-  id: "inferhub",
+  id: "inferhub-image",
   priority: 70,
-  alias: "inferhub",
+  alias: "inferhub-image",
   display: {
     name: "Inferhub",
     icon: "image",

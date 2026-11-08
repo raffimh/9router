@@ -82,6 +82,13 @@ dan patch source-level lain yang butuh build ulang dari fork.
   terduplikasi ke bundle client (`static/chunks/1321-*.js`) dan tabel caps
   client (`static/chunks/5497-*.js`). Runner allChunks kini memindai
   CHUNKS + ST_CHUNKS berdua; P12b + P9 ter-apply ke salinan client.
+- PELAJARAN KRITIS (naming collision): id registry `inferhub` TABRAKAN dengan
+  nama koneksi custom user yang juga bernama `inferhub` -> resolusi alias
+  combo `inferhub/cb/...` berpindah ke provider image (tanpa chat transport)
+  -> [AUTH] No credentials -> 404 -> fallback ke river. Provider image
+  di-rename `inferhub-image`. ATURAN: id provider media JANGAN pakai nama
+  yang mungkin sama dengan nama koneksi custom user (selalu tambahkan
+  suffix -image/-media).
   WAJIB hard-refresh browser (Ctrl+Shift+R) - nama file chunk tidak berubah
   padahal isi berubah, browser cache menyajikan versi lama., marker fix fork
   utuh, regression 14/14 PASS, P9 entry hadir di 3 chunk caps.
