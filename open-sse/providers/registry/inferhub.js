@@ -19,6 +19,7 @@ export default {
     { id: "cx/gpt-image-2-codex", name: "GPT Image 2 (Codex)", params: ["n", "size"], kind: "image" },
     { id: "gpt-image-2-codex", name: "GPT Image 2 Codex", params: ["n", "size"], kind: "image" },
     { id: "cbcn/hunyuan-image-alpha", name: "Hunyuan Image Alpha", params: ["n", "size"], kind: "image" },
+    { id: "alitp/qwen-image-3.0-pro", name: "Qwen Image 3.0 Pro", params: ["n", "size"], kind: "image" },
   ],
   serviceKinds: ["image"],
   imageConfig: {
