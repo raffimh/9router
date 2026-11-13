@@ -213,28 +213,6 @@ const patches = [
     markers: ['{id:"inferhub-image",priority:70'],
   },
   {
-    id: "P8 auth: Qoder quota-112 connection disable",
-    checklist: "2b (manual â†’ automated since v0.5.95)",
-    find: () => readChunk(CHUNKS, "additional usage limit for your plan"),
-    isApplied: (c) => c.content.includes("Qoder quota exhausted [403/code 112]"),
-    patterns: [
-      {
-        // Insert AFTER the generic classifier's `!l` early-return, BEFORE `let s=`:
-        // a 403 always yields shouldFallback:true from the classifier (403 is
-        // excluded from the no-fallback 4xx class), so overriding here is
-        // behaviorally identical to the source-level pre-classification check in
-        // src/sse/services/auth.js (isQoderQuotaExhausted).
-        // v0.5.95 var map (async fn m in chunk 4572): a=connectionId, b=status,
-        // c=errorText, e=provider, p=connection, d.updateProviderConnection,
-        // h.rs=resolveProviderId, j.warn=AUTH logger.
-        from: '!l)return{shouldFallback:!1,cooldownMs:0};',
-        to: '!l)return{shouldFallback:!1,cooldownMs:0};if("qoder"===(0,h.rs)(e)&&403===Number(b)&&/"code"\\s*:\\s*"112"/.test(String(c||""))){let _q="string"==typeof c?c.slice(0,200):"Qoder quota exhausted (code 112)";await (0,d.updateProviderConnection)(a,{isActive:!1,testStatus:"unavailable",lastError:_q,errorCode:403,lastErrorAt:new Date().toISOString(),backoffLevel:0}),j.warn("AUTH",`${p?.displayName||p?.name||p?.email||a.slice(0,8)} disabled: Qoder quota exhausted [403/code 112]`);return{shouldFallback:!0,cooldownMs:0}}',
-        count: 1,
-      },
-    ],
-    markers: ["Qoder quota exhausted [403/code 112]", '"qoder"===(0,h.rs)(e)'],
-  },
-  {
     id: "P9 capabilities: river deepseek-v4.1-flash vision:false (base64-as-text billing)",
     checklist: "2k (new - P11 source parity)",
     allChunks: true,

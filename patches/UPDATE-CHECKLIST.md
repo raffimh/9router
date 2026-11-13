@@ -61,6 +61,18 @@ dan patch source-level lain yang butuh build ulang dari fork.
 
 ---
 
+## 📌 Pensiun: P8 Qoder quota-112 (2026-11-13)
+
+- P8 DIHAPUS dari script atas permintaan user (Qoder tidak dipakai).
+  Blok definisi dibuang dari apply-runtime-patches.mjs dan injection-nya
+  DI-REVERT dari build (chunk 238.js kembali vanilla: to->from).
+  Pemakaian selanjutnya: Qoder quota 403/code 112 berperilaku vanilla
+  (cooldown tanpa disable koneksi). Kalau suatu saat Qoder dipakai lagi
+  dan ingin behavior disable, blok P8 masih bisa diambil dari git history
+  (commit sebelum pensiun ini).
+- Regression 14/14 PASS (tanpa referensi P8), runtime GET /api/v1/models
+  200 via instance diagnostik.
+
 ## 📌 Update v0.5.119 (2026-11-13)
 
 - Merge dengan 1 konflik: imageProviders/index.js ADAPTERS map (upstream
