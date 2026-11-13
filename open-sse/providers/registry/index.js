@@ -148,6 +148,8 @@ import p76 from "./inferhub.js";
 import p151 from "./uc-web.js";
 import p152 from "./runcrate.js";
 import p153 from "./nace.js";
+import p154 from "./sensenova-intl.js";
+import p155 from "./synthetic.js";
 export default [
   p0,
   p1,
@@ -297,4 +299,6 @@ export default [
   p151,
   p152,
   p153,
+  p154,
+  p155,
 ];
