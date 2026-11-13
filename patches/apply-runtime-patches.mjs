@@ -108,7 +108,7 @@ const patches = [
   {
     id: "P3 translator: view_image multimodal (responses->openai tool output)",
     checklist: "2i",
-    loadName: "2380.js",
+    find: () => readChunk(CHUNKS, 'tool_call_id:a.call_id,content:"string"==typeof a.output'), // chunk renamed 2380->1297 in v0.5.119
     isApplied: (c) => c.content.includes('a.output.some(p=>p?.type==="input_image"'),
     patterns: [
       {
@@ -122,7 +122,7 @@ const patches = [
   {
     id: "P4 translator: view_image inlineData (openai->gemini tool result)",
     checklist: "2i",
-    loadName: "2380.js",
+    find: () => readChunk(CHUNKS, "a.push({functionResponse:{id:"), // chunk renamed 2380->1297 in v0.5.119
     isApplied: (c) => c.content.includes("_imgs.push({inlineData"),
     patterns: [
       {
