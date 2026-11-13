@@ -61,6 +61,26 @@ dan patch source-level lain yang butuh build ulang dari fork.
 
 ---
 
+## 📌 Update v0.5.119 (2026-11-13)
+
+- Merge dengan 1 konflik: imageProviders/index.js ADAPTERS map (upstream
+  menambah sensenova-intl setelah sensenova) - resolved keep-both.
+  Commit merge 2668c740, regression 14/14 PASS.
+- P3/P4 FAIL saat pertama: chunk translator 2380.js di-rename upstream
+  jadi 1297.js (v0.5.119). FIX permanen: loadName hardcoded diganti
+  find: () => readChunk(CHUNKS, marker) berbasis konten - P3 marker
+  'tool_call_id:a.call_id...', P4 marker 'a.push({functionResponse:{id:'.
+  Dari sekarang rename chunk tidak akan mematikan patch lagi (fail loud
+  tetap terjadi kalau kode anchor-nya berubah - itu memang mau direview).
+- Verifikasi: statis 12 file OK, 0 lubang, 0 stale alias (pelajaran 9 Nov
+  dicek eksplisit: 4 entry inferhub-image dengan id+alias benar, 1 ADAPTERS),
+  P3/P4 marker hadir. Runtime: instance 20129 - GET /api/v1/models 200 +
+  tes end-to-end POST inferhub/cb/deepseek-v4.1-flash resolve ke koneksi
+  custom (openai-compatible-chat-2d8b000a) -> 200 jawaban deepseek asli.
+- Chunk map v0.5.119: P1/P2 8895, P3/P4 1297 (baru), P8 238, P9 caps
+  24/412/8402 + client 5497-2d39*, P12b katalog 2598/6576/866 + client
+  1321-2fde*. Nama client chunk berubah semua - hard refresh browser wajib.
+
 ## 📌 Update v0.5.116 (2026-11-08)
 
 - Merge bersih (tanpa konflik) dari upstream 1339107e; commit merge 6c904de8.
