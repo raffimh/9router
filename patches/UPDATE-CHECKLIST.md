@@ -73,6 +73,30 @@ dan patch source-level lain yang butuh build ulang dari fork.
 - Regression 14/14 PASS (tanpa referensi P8), runtime GET /api/v1/models
   200 via instance diagnostik.
 
+## 📌 Update v0.5.123 (2026-11-24)
+
+- Merge bersih TANPA konflik (commit 8e56c411); regression 14/14 PASS.
+- Semua patch APPLIED sekali jalan. BUKTI find() berbasis konten: P3/P4
+  otomatis menemukan translator yang pindah chunk lagi (1297 -> 9777)
+  TANPA intervensi manual. P12b menemukan katalog di chunk baru
+  (168/2598/7843 + client 1321-2e99*). P8 benar tidak diterapkan
+  (0 remnan di build - pensiun 13 Nov efektif).
+- Verifikasi: statis 11 file OK, 0 lubang, 0 stale alias, entry
+  inferhub-image lengkap (id+alias+hunyuan+qwen, masing-masing 4x),
+  1 ADAPTERS. Runtime: GET /api/v1/models 200; chat inferhub/cb/deepseek
+  resolve ke koneksi custom -> 200; image gen qwen-image-3.0-pro 200
+  (503 'unable to verify api key' sesaat = cooldown inferhub, bukan patch).
+- Chunk map v0.5.123: P1/P2 8895, P3/P4 9777 (rename lagi - find() content
+  beres), P12b 168/2598/7843 + client 1321-2e99*, P9 24/412/8402 + client
+  5497-6cbb*. Hard refresh browser wajib.
+- Relevansi upstream dgn patch: capabilities.js berubah (auto-merge
+  bersih, P9 tetap match); executors/antigravity.js di-rework besar oleh
+  upstream (fake-429, identity 2.33.0, Hydrogen) - P1 unwrap antigravity
+  tetap match pattern-nya; user tidak terdampak (akun AG disuspend).
+  Sisanya (Kiro identity, ElevenLabs, Cloudflare AI catalog refresh dgn
+  deepseek-v4.1-flash/glm-5.3 replacements, combo thinking-override strip,
+  prompt-cache Claude fix) tidak menyentuh area patch.
+
 ## 📌 Update v0.5.119 (2026-11-13)
 
 - Merge dengan 1 konflik: imageProviders/index.js ADAPTERS map (upstream
