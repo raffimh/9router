@@ -213,26 +213,28 @@ const patches = [
     markers: ['{id:"inferhub-image",priority:70'],
   },
   {
-    id: "P9 capabilities: river deepseek-v4.1-flash vision:false (base64-as-text billing)",
-    checklist: "2k (new - P11 source parity)",
+    id: "P9 capabilities: drop the river vision:false row (native vision + 1M context)",
+    checklist: "2m (rewritten 2026-11-28)",
     allChunks: true,
     findMarker: '{pattern:"*deepseek-v4.*",caps:{vision:!0',
-    isApplied: (c) => c.content.includes('{pattern:"*deepseek-ai/deepseek-v4.1-flash*",caps:{vision:!1'),
-    patterns: [
-      {
-        // riverai bills embedded base64 images as TEXT (~500k tokens per
-        // screenshot). The river id "deepseek-ai/DeepSeek-V4.1-Flash-1017"
-        // slips past the exact vision entries (prefix+suffix drift) and lands
-        // on *deepseek-v4.* (vision:true) - force vision:false so
-        // stripUnsupportedModalities + Vision Adapter engage. Scoped to the
-        // "deepseek-ai/" prefixed id family; other providers unaffected.
-        // Inserted BEFORE *deepseek-v4.* (first match wins).
-        from: '{pattern:"*deepseek-v4.*",caps:{vision:!0,reasoning:!0,thinkingFormat:"deepseek",thinkingEffortSupported:!0,contextWindow:1e6,maxOutput:128e3}}',
-        to: '{pattern:"*deepseek-ai/deepseek-v4.1-flash*",caps:{vision:!1,reasoning:!0,thinkingFormat:"deepseek",contextWindow:128e3,maxOutput:64e3}},{pattern:"*deepseek-v4.*",caps:{vision:!0,reasoning:!0,thinkingFormat:"deepseek",thinkingEffortSupported:!0,contextWindow:1e6,maxOutput:128e3}}',
-        count: 1,
-      },
-    ],
-    markers: ['{pattern:"*deepseek-ai/deepseek-v4.1-flash*",caps:{vision:!1'],
+    isApplied: (c) => !c.content.includes('{pattern:"*deepseek-ai/deepseek-v4.1-flash*",'),
+    // History: P9 (commit 91a55bbb, 2026-10-27) used to insert
+    //   {pattern:"*deepseek-ai/deepseek-v4.1-flash*",caps:{vision:!1,...,contextWindow:128e3,maxOutput:64e3}}
+    // so River never received base64 images. Those limits were the
+    // "deepseek-flash" (GA id) numbers, not V4.1 Flash's: upstream declares
+    //   "deepseek-v4.1-flash": { vision:true, contextWindow:1e6, maxOutput:384e3 }
+    // and the "*deepseek-v4.*" pattern already yields 1e6/128e3. Measured on
+    // v0.5.123: a 1.36 MB PNG (1.82 M base64 chars) costs 2,695 prompt tokens,
+    // i.e. normal image tokenisation, so the base64-as-text premise did not
+    // hold. The row is removed and the native entries apply again.
+    apply: (chunk) => {
+      const re = /\{pattern:"\*deepseek-ai\/deepseek-v4\.1-flash\*",caps:\{[^}]*\}\},?/;
+      if (!re.test(chunk.content)) return { changed: false, note: "no river vision row left" };
+      chunk.content = chunk.content.replace(re, "");
+      return { changed: true, note: "removed the pixel-blocking caps row" };
+    },
+    patterns: [],
+    markers: [],
   },
 ];
 
@@ -299,6 +301,21 @@ for (const patch of patches) {
           results.push({ id: `${patch.id} [${chunk.name}]`, status: "FAIL", note: "not applied (verify-only)" });
           continue;
         }
+        if (patch.apply) {
+          const res = patch.apply(chunk) || {};
+          if (res.error) {
+            results.push({ id: `${patch.id} [${chunk.name}]`, status: "FAIL", note: res.error });
+            continue;
+          }
+          if (res.changed) save(chunk);
+          const missing = patch.markers.filter((m) => !chunk.content.includes(m));
+          if (missing.length) {
+            results.push({ id: `${patch.id} [${chunk.name}]`, status: "FAIL", note: `markers missing after apply: ${missing.join(", ")}` });
+            continue;
+          }
+          results.push({ id: `${patch.id} [${chunk.name}]`, status: res.changed ? "APPLIED" : "ALREADY", note: res.note || "" });
+          continue;
+        }
         let ok = true;
         for (const pat of patch.patterns) {
           const count = chunk.content.split(pat.from).length - 1;
@@ -333,6 +350,21 @@ for (const patch of patches) {
     }
     if (verifyOnly) {
       results.push({ id: patch.id, status: "FAIL", note: "not applied (verify-only mode)" });
+      continue;
+    }
+    if (patch.apply) {
+      const res = patch.apply(chunk) || {};
+      if (res.error) {
+        results.push({ id: patch.id, status: "FAIL", note: res.error });
+        continue;
+      }
+      if (res.changed) save(chunk);
+      const missing = patch.markers.filter((m) => !chunk.content.includes(m));
+      if (missing.length) {
+        results.push({ id: patch.id, status: "FAIL", note: `markers missing after apply: ${missing.join(", ")}` });
+        continue;
+      }
+      results.push({ id: patch.id, status: res.changed ? "APPLIED" : "ALREADY", note: res.note || "" });
       continue;
     }
     if (patch.css) {

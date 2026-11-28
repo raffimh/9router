@@ -61,6 +61,28 @@ dan patch source-level lain yang butuh build ulang dari fork.
 
 ---
 
+## 📌 P9 dibalik: native vision + 1M context (2026-11-28)
+
+- Baris caps `*deepseek-ai/deepseek-v4.1-flash*` (vision:false, 128k/64k)
+  DIHAPUS, bukan di-flip. Model kembali memakai entri native 9Router:
+  `*deepseek-v4.*` -> vision:true, reasoning:true, thinkingFormat deepseek,
+  thinkingEffortSupported:true, contextWindow 1e6, maxOutput 128e3.
+- Asal angka 128k/64k: P9 lama (commit 91a55bbb, 2026-10-27) menyalin limit
+  milik id GA `deepseek-flash` (128k/64k). Upstream `capabilities.js` untuk
+  `deepseek-v4.1-flash` menyebut 1e6/384e3, dan models.dev mencatat
+  `cloudflare-ai:@cf/deepseek-ai/deepseek-v4.1-flash-1017` = 1.048.576.
+  Jadi 128k memang salah salin.
+- Premis "base64-as-text ~500k token/screenshot" tidak tereproduksi di
+  v0.5.123: PNG 1,36 MB (1,82 M char base64) = 2.695 prompt token, 1,0 s,
+  objek terbaca benar. Native vision tetap murah.
+- Runner mendapat dukungan opsional `apply(chunk)` (return
+  `{changed, note?, error?}`) supaya patch bisa migrasi antar bentuk:
+  hapus baris lama, atau no-op kalau build sudah bersih. Patch lama yang
+  memakai `patterns` tidak berubah perilakunya.
+- Verifikasi: P9 APPLIED di 24/412/8402 + client 5497; gate `node --check`
+  OK; `/v1/models` vision=true reasoning=true ctx=1e6 maxOut=128e3;
+  request bergambar 200 dalam 2,5 s.
+
 ## 📌 Pensiun: P8 Qoder quota-112 (2026-11-13)
 
 - P8 DIHAPUS dari script atas permintaan user (Qoder tidak dipakai).
