@@ -82,6 +82,11 @@ dan patch source-level lain yang butuh build ulang dari fork.
 - Verifikasi: P9 APPLIED di 24/412/8402 + client 5497; gate `node --check`
   OK; `/v1/models` vision=true reasoning=true ctx=1e6 maxOut=128e3;
   request bergambar 200 dalam 2,5 s.
+- Keputusan 2026-11-28: `maxOutput` sengaja dibiarkan **128k** (dari pola
+  `*deepseek-v4.*`), BUKAN 384k milik entri `deepseek-v4.1-flash`. 128k
+  dianggap wajar untuk model ini; jangan naikkan ke 384k tanpa alasan kuat
+  dan tanpa konfirmasi limit dari River (API `/models` mereka tidak
+  melaporkan limit).
 
 ## 📌 Pensiun: P8 Qoder quota-112 (2026-11-13)
 
